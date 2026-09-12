@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apex Horizon Enterprises — Corporate AI Voice Receptionist</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+    <!-- Header Navigation -->
+    <header class="header-bar">
+        <div class="brand-section">
+            <div class="brand-logo">🏢</div>
+            <div class="brand-text">
+                <h1 id="companyHeaderTitle">Apex Horizon Enterprises</h1>
+                <p>Executive Front Desk & Virtual Concierge Console</p>
+            </div>
+        </div>
+
+        <div class="header-status-group">
+            <div class="system-clock" id="systemClock">12:00:00 PM EST</div>
+            <div class="connection-pill" id="connectionPill">
+                <span class="status-dot"></span>
+                <span id="connectionText">Ready</span>
+            </div>
+            <button class="btn-icon" id="openSettingsBtn" title="System Settings">⚙️</button>
+        </div>
+    </header>
+
+    <!-- Main App Split Layout -->
+    <main class="main-container">
+        <!-- Left Column: Voice Reception Console -->
+        <section class="glass-panel reception-console">
+            <div class="console-hero" id="consoleHero">
+                <div class="receptionist-avatar-container" id="avatarContainer">
+                    <div class="avatar-ring"></div>
+                    <div class="avatar-glow"></div>
+                    <div class="receptionist-avatar" id="receptionistAvatar">🎙️</div>
+                </div>
+
+                <div class="receptionist-identity">
+                    <h2 id="receptionistNameDisplay">Aria</h2>
+                    <p id="receptionistRoleDisplay">Executive AI Corporate Receptionist</p>
+                    <div class="live-badge idle" id="liveBadge">
+                        <span>●</span> <span id="badgeText">Standby</span>
+                    </div>
+                </div>
+
+                <!-- Waveform Canvas -->
+                <div class="waveform-container">
+                    <canvas id="waveformCanvas" width="480" height="48"></canvas>
+                </div>
+
+                <!-- Call Control Buttons -->
+                <div class="call-actions-row">
+                    <button class="btn-call btn-start-call" id="startCallBtn">
+                        <span>📞</span> Start Voice Call
+                    </button>
+                    <button class="btn-call btn-end-call" id="endCallBtn">
+                        <span>🔴</span> End Call
+                    </button>
+                    <button class="btn-mute" id="muteBtn">
+                        <span id="muteIcon">🎤</span> <span id="muteLabel">Mute</span>
+                    </button>
+                </div>
+
+                <!-- Active Tool Execution Banner -->
+                <div class="active-tool-banner" id="activeToolBanner">
+                    <div class="tool-spinner"></div>
+                    <span id="toolBannerText">Executing tool...</span>
+                </div>
+            </div>
+
+            <!-- Quick Suggestions Bar -->
+            <div class="quick-prompts-bar">
+                <button class="prompt-pill" data-prompt="What are your office hours and address?">📍 Hours & Address</button>
+                <button class="prompt-pill" data-prompt="I would like to book an appointment with Enterprise Sales tomorrow.">🗓️ Book with Sales</button>
+                <button class="prompt-pill" data-prompt="Is Sarah Jenkins available to speak?">👤 Check Sarah Jenkins</button>
+                <button class="prompt-pill" data-prompt="What is the guest Wi-Fi password and visitor check-in policy?">📶 Wi-Fi & Badges</button>
+                <button class="prompt-pill" data-prompt="Please leave an urgent message for Michael Torres regarding invoice #981.">✉️ Leave Message</button>
+            </div>
+
+            <!-- Live Dialogue Transcript Stream -->
+            <div class="transcript-feed" id="transcriptFeed">
+                <div class="system-notice">
+                    Welcome to the Front Desk Console. Click <strong>"Start Voice Call"</strong> or type a message below to begin interacting with Aria.
+                </div>
+            </div>
+
+            <!-- Chat Input Fallback -->
+            <div class="console-input-bar">
+                <input type="text" id="chatInput" class="chat-input" placeholder="Speak via voice or type your inquiry here..." autocomplete="off">
+                <button class="btn-send" id="sendChatBtn">Send</button>
+            </div>
+        </section>
+
+        <!-- Right Column: Front Desk Management Suite -->
+        <section class="glass-panel office-suite">
+            <!-- Suite Navigation Tabs -->
+            <nav class="suite-tabs">
+                <button class="tab-btn active" data-tab="appointmentsTab">
+                    <span>📅</span> Appointments <span class="badge-count" id="apptCountBadge">0</span>
+                </button>
+                <button class="tab-btn" data-tab="messagesTab">
+                    <span>✉️</span> Caller Messages <span class="badge-count" id="msgCountBadge">0</span>
+                </button>
+                <button class="tab-btn" data-tab="directoryTab">
+                    <span>👥</span> Staff Directory
+                </button>
+                <button class="tab-btn" data-tab="faqTab">
+                    <span>🏢</span> Office Info
+                </button>
+                <button class="tab-btn" data-tab="logsTab">
+                    <span>📜</span> Call Logs
+                </button>
+            </nav>
+
+            <!-- Suite Content Panes -->
+            <div class="suite-content">
+                <!-- Tab 1: Appointments -->
+                <div class="tab-pane active" id="appointmentsTab">
+                    <div class="pane-header">
+                        <h3>Scheduled Visitors & Meetings</h3>
+                        <button class="btn-icon" id="refreshApptsBtn" title="Refresh Appointments">🔄</button>
+                    </div>
+                    <div class="card-list" id="appointmentsList">
+                        <div class="system-notice">Loading upcoming appointments...</div>
+                    </div>
+                </div>
+
+                <!-- Tab 2: Messages & Inquiries -->
+                <div class="tab-pane" id="messagesTab">
+                    <div class="pane-header">
+                        <h3>Visitor Messages & Voicemails</h3>
+                        <button class="btn-icon" id="refreshMsgsBtn" title="Refresh Messages">🔄</button>
+                    </div>
+                    <div class="card-list" id="messagesList">
+                        <div class="system-notice">Loading messages...</div>
+                    </div>
+                </div>
+
+                <!-- Tab 3: Staff Directory -->
+                <div class="tab-pane" id="directoryTab">
+                    <div class="pane-header">
+                        <h3>Staff Directory</h3>
+                        <div class="search-input-wrapper">
+                            <span class="search-icon">🔍</span>
+                            <input type="text" id="directorySearchInput" class="search-input" placeholder="Search by name, department, or title...">
+                        </div>
+                    </div>
+                    <div class="card-list" id="directoryList">
+                        <div class="system-notice">Loading directory...</div>
+                    </div>
+                </div>
+
+                <!-- Tab 4: Office FAQs & Knowledge -->
+                <div class="tab-pane" id="faqTab">
+                    <div class="pane-header">
+                        <h3>Corporate Knowledge & Policies</h3>
+                    </div>
+                    <div class="card-list" id="faqList">
+                        <div class="system-notice">Loading company knowledge...</div>
+                    </div>
+                </div>
+
+                <!-- Tab 5: Call Logs -->
+                <div class="tab-pane" id="logsTab">
+                    <div class="pane-header">
+                        <h3>Reception Call History</h3>
+                        <button class="btn-icon" id="refreshLogsBtn" title="Refresh Logs">🔄</button>
+                    </div>
+                    <div class="card-list" id="logsList">
+                        <div class="system-notice">No recorded calls yet.</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Settings Modal -->
+    <div class="modal-overlay" id="settingsModal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>System & Voice Settings</h3>
+                <button class="btn-icon" id="closeSettingsBtn">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="apiKeyInput">Google Gemini API Key</label>
+                    <input type="password" id="apiKeyInput" class="form-input" placeholder="Enter your Gemini API key (AIza...)">
+                    <p class="form-help">Required for Live Audio & Speech intelligence. Key can also be set in <code>.env</code>.</p>
+                </div>
+
+                <div class="form-group">
+                    <label for="voiceSelect">Receptionist Voice Persona</label>
+                    <select id="voiceSelect" class="form-select">
+                        <option value="Aoede">Aoede (Warm, Sophisticated, Poised - Female)</option>
+                        <option value="Puck">Puck (Energetic, Friendly, Bright - Male)</option>
+                        <option value="Charon">Charon (Calm, Professional, Deep - Male)</option>
+                        <option value="Fenrir">Fenrir (Authoritative, Crisp - Male)</option>
+                        <option value="Kore">Kore (Gentle, Courteous - Female)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="liveModelDisplay">Live API Model</label>
+                    <input type="text" id="liveModelDisplay" class="form-input" value="gemini-3.1-flash-live-preview" disabled>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="cancelSettingsBtn">Cancel</button>
+                <button class="btn-primary" id="saveSettingsBtn">Save Settings</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Scripts -->
+    <script src="/static/js/audio-player.js"></script>
+    <script src="/static/js/audio-processor.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
