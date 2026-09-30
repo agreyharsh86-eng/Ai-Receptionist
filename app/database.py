@@ -1,16 +1,40 @@
+import os
+import shutil
+from pathlib import Path
 import aiosqlite
 from datetime import datetime, date, timedelta
 from app.config import DB_PATH
 
+_db_initialized = False
+
+def get_effective_db_path() -> Path:
+    if os.getenv("VERCEL"):
+        tmp_db = Path("/tmp") / "receptionist.db"
+        if not tmp_db.exists() and DB_PATH.exists():
+            try:
+                shutil.copy2(DB_PATH, tmp_db)
+            except Exception:
+                pass
+        return tmp_db
+    return DB_PATH
+
 async def get_db():
-    db = await aiosqlite.connect(DB_PATH)
+    global _db_initialized
+    db_path = get_effective_db_path()
+    if not _db_initialized:
+        await init_db()
+        _db_initialized = True
+    db = await aiosqlite.connect(db_path)
     db.row_factory = aiosqlite.Row
     return db
 
 async def init_db():
     """Create tables and populate seed data if not present."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    global _db_initialized
+    db_path = get_effective_db_path()
+    async with aiosqlite.connect(db_path) as db:
         await db.execute("PRAGMA foreign_keys = ON")
+        _db_initialized = True
 
         # 1. Company Information / Knowledge Base
         await db.execute("""

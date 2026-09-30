@@ -12,9 +12,12 @@ document.addEventListener('DOMContentLoaded', () => {
         activeTab: 'appointmentsTab',
         apiKey: localStorage.getItem('gemini_api_key') || '',
         voice: localStorage.getItem('receptionist_voice') || 'Aoede',
+        customWsUrl: localStorage.getItem('custom_ws_url') || '',
         ws: null,
         audioRecorder: null,
         audioPlayer: null,
+        speechRecognition: null,
+        isSpeechRecognitionMode: false,
         visualizerAnimationId: null,
         currentVolume: 0,
         companyInfo: null
@@ -60,6 +63,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const saveSettingsBtn = document.getElementById('saveSettingsBtn');
     const apiKeyInput = document.getElementById('apiKeyInput');
     const voiceSelect = document.getElementById('voiceSelect');
+    const customWsUrlInput = document.getElementById('customWsUrlInput');
 
     // Initialize System Clock
     function updateClock() {
@@ -154,6 +158,14 @@ document.addEventListener('DOMContentLoaded', () => {
         updateLiveBadge('processing', 'Connecting...');
         connectionText.textContent = 'Connecting...';
 
+        const isVercelHost = window.location.hostname.endsWith('vercel.app') || window.location.hostname.includes('vercel');
+
+        // If on Vercel without an external WebSocket backend URL, use browser voice assistant directly
+        if (isVercelHost && !state.customWsUrl) {
+            startBrowserVoiceSession();
+            return;
+        }
+
         try {
             // 1. Initialize Audio Player for 24kHz Gemini output
             state.audioPlayer = new window.PcmAudioPlayer(24000);
@@ -189,10 +201,18 @@ document.addEventListener('DOMContentLoaded', () => {
             if (state.apiKey) queryParams.set('api_key', state.apiKey);
             if (state.voice) queryParams.set('voice', state.voice);
 
-            const wsUrl = `${protocol}//${window.location.host}/ws/live?${queryParams.toString()}`;
+            let wsUrl = state.customWsUrl;
+            if (!wsUrl) {
+                wsUrl = `${protocol}//${window.location.host}/ws/live?${queryParams.toString()}`;
+            } else {
+                wsUrl += (wsUrl.includes('?') ? '&' : '?') + queryParams.toString();
+            }
+
+            let connectionOpened = false;
             state.ws = new WebSocket(wsUrl);
 
             state.ws.onopen = () => {
+                connectionOpened = true;
                 state.isCallActive = true;
                 updateCallUiState(true);
                 connectionPill.classList.add('live-active');
@@ -205,17 +225,132 @@ document.addEventListener('DOMContentLoaded', () => {
             };
 
             state.ws.onerror = (err) => {
-                console.error('WebSocket error:', err);
-                showToast('WebSocket connection error', 'error');
+                console.warn('WebSocket connection error:', err);
+                if (!connectionOpened) {
+                    // Fall back gracefully to browser voice assistant
+                    showToast('WebSocket unavailable on host. Switching to Voice Assistant mode...', 'info');
+                    if (state.audioRecorder) {
+                        state.audioRecorder.stop();
+                        state.audioRecorder = null;
+                    }
+                    if (state.audioPlayer) {
+                        state.audioPlayer.close();
+                        state.audioPlayer = null;
+                    }
+                    startBrowserVoiceSession();
+                } else {
+                    showToast('WebSocket connection error', 'error');
+                }
             };
 
             state.ws.onclose = () => {
-                endVoiceCall();
+                if (connectionOpened) {
+                    endVoiceCall();
+                }
             };
 
         } catch (err) {
             console.error('Failed to start call:', err);
-            showToast(`Could not access microphone: ${err.message}`, 'error');
+            startBrowserVoiceSession();
+        }
+    }
+
+    async function startBrowserVoiceSession() {
+        const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRec) {
+            showToast('Voice mode requires Google Chrome, Edge, or Safari with Web Speech support.', 'error');
+            updateCallUiState(false);
+            updateLiveBadge('idle', 'Standby');
+            connectionText.textContent = 'Ready';
+            return;
+        }
+
+        state.isCallActive = true;
+        state.isSpeechRecognitionMode = true;
+        updateCallUiState(true);
+        connectionPill.classList.add('live-active');
+        connectionText.textContent = 'Voice Assistant';
+        updateLiveBadge('listening', 'Listening...');
+        appendTranscriptMessage('system', 'Connected to Aria via Voice Assistant mode. Speak into your microphone!');
+
+        // Greeting
+        if ('speechSynthesis' in window) {
+            const utter = new SpeechSynthesisUtterance("Hello! Welcome to Apex Horizon Enterprises. How may I assist you today?");
+            utter.rate = 1.05;
+            utter.onstart = () => updateLiveBadge('speaking', 'Aria Speaking');
+            utter.onend = () => {
+                if (state.isCallActive) updateLiveBadge('listening', 'Listening...');
+            };
+            window.speechSynthesis.speak(utter);
+            appendTranscriptMessage('model', 'Hello! Welcome to Apex Horizon Enterprises. How may I assist you today?');
+        }
+
+        const recognition = new SpeechRec();
+        recognition.continuous = true;
+        recognition.interimResults = false;
+        recognition.lang = 'en-US';
+
+        recognition.onresult = async (event) => {
+            const last = event.results.length - 1;
+            const transcript = event.results[last][0].transcript.trim();
+            if (!transcript || state.isMuted) return;
+
+            appendTranscriptMessage('user', transcript);
+            updateLiveBadge('processing', 'Aria Thinking...');
+
+            try {
+                const res = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message: transcript,
+                        api_key: state.apiKey
+                    })
+                });
+
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Chat request failed');
+
+                appendTranscriptMessage('model', data.reply);
+
+                if ('speechSynthesis' in window) {
+                    const replyUtter = new SpeechSynthesisUtterance(data.reply);
+                    replyUtter.rate = 1.05;
+                    replyUtter.onstart = () => updateLiveBadge('speaking', 'Aria Speaking');
+                    replyUtter.onend = () => {
+                        if (state.isCallActive) updateLiveBadge('listening', 'Listening...');
+                    };
+                    window.speechSynthesis.speak(replyUtter);
+                }
+
+                if (data.actions && data.actions.length > 0) {
+                    loadAppointments();
+                    loadMessages();
+                }
+            } catch (err) {
+                console.error('Speech interaction error:', err);
+                showToast(err.message, 'error');
+            }
+        };
+
+        recognition.onerror = (e) => {
+            if (e.error !== 'no-speech') {
+                console.warn('Speech recognition status:', e.error);
+            }
+        };
+
+        recognition.onend = () => {
+            if (state.isCallActive && state.isSpeechRecognitionMode) {
+                try { recognition.start(); } catch (e) {}
+            }
+        };
+
+        try {
+            recognition.start();
+            state.speechRecognition = recognition;
+        } catch (e) {
+            console.error('Could not start SpeechRecognition:', e);
+            showToast('Microphone access denied', 'error');
             endVoiceCall();
         }
     }
@@ -275,10 +410,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function endVoiceCall() {
-        if (!state.isCallActive && !state.ws) return;
+        if (!state.isCallActive && !state.ws && !state.speechRecognition) return;
 
         state.isCallActive = false;
+        state.isSpeechRecognitionMode = false;
         state.currentVolume = 0;
+
+        if (state.speechRecognition) {
+            try {
+                state.speechRecognition.onend = null;
+                state.speechRecognition.stop();
+            } catch (e) {}
+            state.speechRecognition = null;
+        }
+
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+        }
 
         if (state.ws) {
             if (state.ws.readyState === WebSocket.OPEN) {
@@ -309,9 +457,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function toggleMute() {
-        if (!state.audioRecorder) return;
         state.isMuted = !state.isMuted;
-        state.audioRecorder.setMuted(state.isMuted);
+        if (state.audioRecorder) {
+            state.audioRecorder.setMuted(state.isMuted);
+        }
 
         if (state.isMuted) {
             muteBtn.classList.add('muted');
@@ -320,9 +469,9 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast('Microphone muted', 'info');
         } else {
             muteBtn.classList.remove('muted');
-            muteIcon.textContent = '🎤';
+            muteIcon.textContent = '🎙️';
             muteLabel.textContent = 'Mute';
-            showToast('Microphone unmuted', 'info');
+            showToast('Microphone active', 'info');
         }
     }
 
@@ -661,6 +810,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function openSettingsModal() {
         apiKeyInput.value = state.apiKey;
         voiceSelect.value = state.voice;
+        if (customWsUrlInput) customWsUrlInput.value = state.customWsUrl;
         settingsModal.classList.add('active');
     }
 
@@ -671,11 +821,14 @@ document.addEventListener('DOMContentLoaded', () => {
     async function saveSettings() {
         const key = apiKeyInput.value.trim();
         const selectedVoice = voiceSelect.value;
+        const customWs = customWsUrlInput ? customWsUrlInput.value.trim() : '';
 
         state.apiKey = key;
         state.voice = selectedVoice;
+        state.customWsUrl = customWs;
         localStorage.setItem('gemini_api_key', key);
         localStorage.setItem('receptionist_voice', selectedVoice);
+        localStorage.setItem('custom_ws_url', customWs);
 
         if (key) {
             await fetch('/api/config/key', {

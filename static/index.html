@@ -206,6 +206,12 @@
                     <label for="liveModelDisplay">Live API Model</label>
                     <input type="text" id="liveModelDisplay" class="form-input" value="gemini-3.1-flash-live-preview" disabled>
                 </div>
+
+                <div class="form-group">
+                    <label for="customWsUrlInput">Live WebSocket Audio Backend (Optional)</label>
+                    <input type="text" id="customWsUrlInput" class="form-input" placeholder="e.g. wss://your-backend.railway.app/ws/live">
+                    <p class="form-help">Optional for Vercel: Provide an external WebSocket URL for full PCM audio streaming, or leave empty for built-in Browser Voice Assistant mode.</p>
+                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn-secondary" id="cancelSettingsBtn">Cancel</button>
