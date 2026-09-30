@@ -222,15 +222,138 @@ async def set_api_key(data: ApiKeyUpdate):
     config.GEMINI_API_KEY = data.api_key.strip()
     return {"status": "success", "message": "API key updated successfully"}
 
+async def handle_demo_chat(query: str) -> Dict[str, Any]:
+    text = query.strip().lower()
+    actions_taken = []
+
+    # 1. Greetings
+    if any(w in text for w in ["hello", "hi", "hey", "good morning", "good afternoon", "greetings"]):
+        return {
+            "reply": f"Good day! Welcome to {config.COMPANY_NAME}. My name is {config.RECEPTIONIST_NAME}. How may I direct your call or assist you today?",
+            "actions": []
+        }
+
+    # 2. Hours & Schedule
+    if any(w in text for w in ["hour", "open", "close", "timing", "schedule"]):
+        res = await get_company_info(topic="hours")
+        return {
+            "reply": f"Our corporate headquarters is open Monday to Friday from 8:30 AM to 5:30 PM EST. We are closed on weekends. How else may I assist you?",
+            "actions": [{"tool": "get_company_info", "args": {"topic": "hours"}}]
+        }
+
+    # 3. Location, Address, Parking
+    if any(w in text for w in ["location", "address", "where", "direction", "parking"]):
+        topic = "parking" if "parking" in text else "location"
+        res = await get_company_info(topic=topic)
+        return {
+            "reply": f"{res.get('content')}. How may I help you further?",
+            "actions": [{"tool": "get_company_info", "args": {"topic": topic}}]
+        }
+
+    # 4. Wi-Fi / Badges / Security
+    if any(w in text for w in ["wifi", "wi-fi", "internet", "badge", "security"]):
+        topic = "wifi" if ("wifi" in text or "wi-fi" in text) else "security"
+        res = await get_company_info(topic=topic)
+        return {
+            "reply": f"{res.get('content')}",
+            "actions": [{"tool": "get_company_info", "args": {"topic": topic}}]
+        }
+
+    # 5. Availability Check
+    if any(w in text for w in ["available", "availability", "free", "slot"]):
+        staff = "Marcus Sterling"
+        for name in ["Elena Vance", "Marcus Sterling", "Sarah Jenkins", "Michael Torres"]:
+            if name.lower() in text or name.split()[0].lower() in text:
+                staff = name
+                break
+        today_str = date.today().isoformat()
+        res = await check_availability(staff_or_department=staff, date_str=today_str)
+        actions_taken.append({"tool": "check_availability", "args": {"staff_or_department": staff, "date_str": today_str}})
+        slots = res.get("available_slots", [])[:4]
+        if slots:
+            slots_str = ", ".join(slots)
+            return {
+                "reply": f"{staff} has open time slots today at: {slots_str}. Would you like me to book one of these for you?",
+                "actions": actions_taken
+            }
+        else:
+            return {
+                "reply": f"{staff} has no available slots remaining today. Would you like to leave a message for them?",
+                "actions": actions_taken
+            }
+
+    # 6. Book appointment
+    if any(w in text for w in ["book", "reserve", "schedule"]):
+        staff = "Marcus Sterling"
+        for name in ["Elena Vance", "Marcus Sterling", "Sarah Jenkins", "Michael Torres"]:
+            if name.lower() in text or name.split()[0].lower() in text:
+                staff = name
+                break
+        today_str = date.today().isoformat()
+        slot = "02:00 PM"
+        for s in ["09:00 AM", "10:00 AM", "11:00 AM", "01:00 PM", "02:00 PM", "03:00 PM", "04:00 PM"]:
+            if s.lower() in text or s.split()[0].lower() in text:
+                slot = s
+                break
+        res = await book_appointment(
+            visitor_name="Guest Caller",
+            contact_info="caller@guest.com",
+            staff_or_department=staff,
+            date_str=today_str,
+            time_slot=slot,
+            purpose="Front Desk Consultation"
+        )
+        actions_taken.append({"tool": "book_appointment", "args": {"staff": staff, "slot": slot}})
+        return {
+            "reply": f"I have booked an appointment with {staff} for you today at {slot}. Your confirmation has been recorded.",
+            "actions": actions_taken
+        }
+
+    # 7. Leave message
+    if any(w in text for w in ["message", "voicemail", "note"]):
+        staff = "Michael Torres"
+        for name in ["Elena Vance", "Marcus Sterling", "Sarah Jenkins", "Michael Torres"]:
+            if name.lower() in text or name.split()[0].lower() in text:
+                staff = name
+                break
+        res = await leave_message(
+            caller_name="Guest Caller",
+            contact_info="caller@guest.com",
+            recipient_name=staff,
+            message=query,
+            urgency="Normal"
+        )
+        actions_taken.append({"tool": "leave_message", "args": {"recipient": staff}})
+        return {
+            "reply": f"I have recorded your message for {staff}. They will be notified and will follow up with you as soon as possible.",
+            "actions": actions_taken
+        }
+
+    # 8. Staff directory lookup
+    if any(w in text for w in ["directory", "who is", "extension", "contact", "ceo", "engineer", "sales"]):
+        res = await lookup_directory(query=query)
+        actions_taken.append({"tool": "lookup_directory", "args": {"query": query}})
+        staff_list = res.get("staff", [])
+        if staff_list:
+            p = staff_list[0]
+            return {
+                "reply": f"{p['name']} is our {p['title']} in {p['department']}. Their status is currently '{p['status']}' at extension {p['phone_extension']}. Would you like me to connect you or check their availability?",
+                "actions": actions_taken
+            }
+
+    # Default fallback
+    return {
+        "reply": f"Thank you for reaching out to {config.COMPANY_NAME}. I can help you check staff availability, book appointments, find office directions and hours, or take a message. What can I do for you?",
+        "actions": []
+    }
+
 # 7. Text Chat & Fallback Endpoint
 @router.post("/chat")
 async def text_chat_endpoint(chat_req: TextChatRequest):
     active_key = (chat_req.api_key or config.GEMINI_API_KEY).strip()
     if not active_key:
-        raise HTTPException(
-            status_code=400,
-            detail="Gemini API Key is not configured. Please enter your API key in Settings or set GEMINI_API_KEY in .env."
-        )
+        # Fall back to built-in front-desk knowledge engine instead of failing
+        return await handle_demo_chat(chat_req.message)
 
     try:
         from google import genai

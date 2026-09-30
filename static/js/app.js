@@ -18,6 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
         audioPlayer: null,
         speechRecognition: null,
         isSpeechRecognitionMode: false,
+        isAriaSpeaking: false,
         visualizerAnimationId: null,
         currentVolume: 0,
         companyInfo: null
@@ -102,6 +103,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     const freqIdx = Math.floor((i / barCount) * freqData.length);
                     const val = freqData[freqIdx] / 255.0;
                     barHeight = Math.max(4, val * (height * 0.9));
+                } else if (state.isAriaSpeaking) {
+                    const time = Date.now() * 0.007;
+                    const wave = Math.sin(time + i * 0.35) * (height * 0.42) + Math.cos(time * 0.4 + i * 0.2) * (height * 0.25);
+                    barHeight = Math.max(6, Math.abs(wave));
                 } else if (state.currentVolume > 0.01) {
                     // User mic volume fluctuation
                     const wave = Math.sin((i / barCount) * Math.PI) * state.currentVolume * (height * 0.85);
@@ -118,7 +123,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Gradient fill
             const grad = canvasCtx.createLinearGradient(x, y, x, y + barHeight);
-            if (state.audioPlayer && state.audioPlayer.isPlaying) {
+            if ((state.audioPlayer && state.audioPlayer.isPlaying) || state.isAriaSpeaking) {
                 grad.addColorStop(0, '#00f0ff');
                 grad.addColorStop(1, '#6366f1');
             } else if (state.currentVolume > 0.05) {
@@ -149,8 +154,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // Check if server already has GEMINI_API_KEY
             const cfg = await fetch('/api/config').then(r => r.json()).catch(() => ({}));
             if (!cfg.has_api_key) {
-                showToast('Please enter your Gemini API Key in Settings first.', 'warning');
-                openSettingsModal();
+                showToast('Aria running in Voice Assistant mode. (Add Gemini API key in Settings for full AI streaming)', 'info');
+                startBrowserVoiceSession();
                 return;
             }
         }
@@ -228,7 +233,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.warn('WebSocket connection error:', err);
                 if (!connectionOpened) {
                     // Fall back gracefully to browser voice assistant
-                    showToast('WebSocket unavailable on host. Switching to Voice Assistant mode...', 'info');
+                    showToast('WebSocket unavailable. Switching to Voice Assistant mode...', 'info');
                     if (state.audioRecorder) {
                         state.audioRecorder.stop();
                         state.audioRecorder = null;
@@ -255,6 +260,42 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function speakAria(text, onComplete) {
+        if (!('speechSynthesis' in window)) {
+            if (onComplete) onComplete();
+            return;
+        }
+        try {
+            window.speechSynthesis.cancel();
+            window.speechSynthesis.resume();
+        } catch (e) {}
+
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.rate = 1.05;
+        utter.pitch = 1.0;
+
+        const voices = window.speechSynthesis.getVoices();
+        const preferred = voices.find(v => (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Samantha') || v.name.includes('Zira') || v.name.includes('Jenny')) && v.lang.startsWith('en'));
+        if (preferred) utter.voice = preferred;
+
+        utter.onstart = () => {
+            state.isAriaSpeaking = true;
+            updateLiveBadge('speaking', 'Aria Speaking');
+        };
+        utter.onend = () => {
+            state.isAriaSpeaking = false;
+            if (state.isCallActive) updateLiveBadge('listening', 'Listening...');
+            if (onComplete) onComplete();
+        };
+        utter.onerror = () => {
+            state.isAriaSpeaking = false;
+            if (state.isCallActive) updateLiveBadge('listening', 'Listening...');
+            if (onComplete) onComplete();
+        };
+
+        window.speechSynthesis.speak(utter);
+    }
+
     async function startBrowserVoiceSession() {
         const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRec) {
@@ -274,16 +315,9 @@ document.addEventListener('DOMContentLoaded', () => {
         appendTranscriptMessage('system', 'Connected to Aria via Voice Assistant mode. Speak into your microphone!');
 
         // Greeting
-        if ('speechSynthesis' in window) {
-            const utter = new SpeechSynthesisUtterance("Hello! Welcome to Apex Horizon Enterprises. How may I assist you today?");
-            utter.rate = 1.05;
-            utter.onstart = () => updateLiveBadge('speaking', 'Aria Speaking');
-            utter.onend = () => {
-                if (state.isCallActive) updateLiveBadge('listening', 'Listening...');
-            };
-            window.speechSynthesis.speak(utter);
-            appendTranscriptMessage('model', 'Hello! Welcome to Apex Horizon Enterprises. How may I assist you today?');
-        }
+        const greetingText = "Good day! Welcome to Apex Horizon Enterprises. My name is Aria, your virtual receptionist. How may I assist you today?";
+        appendTranscriptMessage('model', greetingText);
+        speakAria(greetingText);
 
         const recognition = new SpeechRec();
         recognition.continuous = true;
@@ -293,7 +327,7 @@ document.addEventListener('DOMContentLoaded', () => {
         recognition.onresult = async (event) => {
             const last = event.results.length - 1;
             const transcript = event.results[last][0].transcript.trim();
-            if (!transcript || state.isMuted) return;
+            if (!transcript || state.isMuted || state.isAriaSpeaking) return;
 
             appendTranscriptMessage('user', transcript);
             updateLiveBadge('processing', 'Aria Thinking...');
@@ -312,16 +346,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!res.ok) throw new Error(data.detail || 'Chat request failed');
 
                 appendTranscriptMessage('model', data.reply);
-
-                if ('speechSynthesis' in window) {
-                    const replyUtter = new SpeechSynthesisUtterance(data.reply);
-                    replyUtter.rate = 1.05;
-                    replyUtter.onstart = () => updateLiveBadge('speaking', 'Aria Speaking');
-                    replyUtter.onend = () => {
-                        if (state.isCallActive) updateLiveBadge('listening', 'Listening...');
-                    };
-                    window.speechSynthesis.speak(replyUtter);
-                }
+                speakAria(data.reply);
 
                 if (data.actions && data.actions.length > 0) {
                     loadAppointments();
@@ -330,6 +355,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (err) {
                 console.error('Speech interaction error:', err);
                 showToast(err.message, 'error');
+                updateLiveBadge('listening', 'Listening...');
             }
         };
 
@@ -584,13 +610,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 appendTranscriptMessage('model', data.reply);
                 updateLiveBadge('idle', 'Standby');
 
-                // Optional browser speech synthesis for fallback chat
-                if ('speechSynthesis' in window) {
-                    const utter = new SpeechSynthesisUtterance(data.reply);
-                    utter.rate = 1.05;
-                    utter.pitch = 1.0;
-                    window.speechSynthesis.speak(utter);
-                }
+                speakAria(data.reply);
 
                 // If tools modified data, refresh
                 if (data.actions && data.actions.length > 0) {
