@@ -113,9 +113,9 @@ All tests execute against SQLite and verify availability checks, bookings, cance
 
 ---
 
-## 🎙️ How to Interact with Aria (Receptionist)
+## 🎙️ How to Interact with Jack (Receptionist)
 
-Click **"Start Voice Call"** and speak naturally with Aria:
+Click **"Start Voice Call"** and speak naturally with Jack:
 1. **Corporate Information**:
    - *"What are your office hours and where are you located?"*
    - *"Where can visitors park, and what is the Wi-Fi password?"*

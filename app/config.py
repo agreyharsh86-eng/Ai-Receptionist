@@ -19,7 +19,7 @@ HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8000"))
 
 # Receptionist Persona Configuration
-RECEPTIONIST_NAME = "Aria"
+RECEPTIONIST_NAME = "Jack"
 COMPANY_NAME = "Apex Horizon Enterprises"
 COMPANY_INDUSTRY = "Enterprise Cloud & AI Solutions"
 COMPANY_LOCATION = "Tower 4, Suite 1200, 500 Silicon Vista Way, Innovation District"

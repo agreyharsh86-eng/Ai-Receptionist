@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
         audioPlayer: null,
         speechRecognition: null,
         isSpeechRecognitionMode: false,
-        isAriaSpeaking: false,
+        isJackSpeaking: false,
         visualizerAnimationId: null,
         currentVolume: 0,
         companyInfo: null
@@ -103,7 +103,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const freqIdx = Math.floor((i / barCount) * freqData.length);
                     const val = freqData[freqIdx] / 255.0;
                     barHeight = Math.max(4, val * (height * 0.9));
-                } else if (state.isAriaSpeaking) {
+                } else if (state.isJackSpeaking) {
                     const time = Date.now() * 0.007;
                     const wave = Math.sin(time + i * 0.35) * (height * 0.42) + Math.cos(time * 0.4 + i * 0.2) * (height * 0.25);
                     barHeight = Math.max(6, Math.abs(wave));
@@ -123,7 +123,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Gradient fill
             const grad = canvasCtx.createLinearGradient(x, y, x, y + barHeight);
-            if ((state.audioPlayer && state.audioPlayer.isPlaying) || state.isAriaSpeaking) {
+            if ((state.audioPlayer && state.audioPlayer.isPlaying) || state.isJackSpeaking) {
                 grad.addColorStop(0, '#00f0ff');
                 grad.addColorStop(1, '#6366f1');
             } else if (state.currentVolume > 0.05) {
@@ -154,7 +154,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Check if server already has GEMINI_API_KEY
             const cfg = await fetch('/api/config').then(r => r.json()).catch(() => ({}));
             if (!cfg.has_api_key) {
-                showToast('Aria running in Voice Assistant mode. (Add Gemini API key in Settings for full AI streaming)', 'info');
+                showToast('Jack running in Voice Assistant mode. (Add Gemini API key in Settings for full AI streaming)', 'info');
                 startBrowserVoiceSession();
                 return;
             }
@@ -177,7 +177,7 @@ document.addEventListener('DOMContentLoaded', () => {
             state.audioPlayer.init();
             state.audioPlayer.onPlaybackStateChange = (isPlaying) => {
                 if (isPlaying) {
-                    updateLiveBadge('speaking', 'Aria Speaking');
+                    updateLiveBadge('speaking', 'Jack Speaking');
                 } else if (state.isCallActive) {
                     updateLiveBadge('listening', 'Listening...');
                 }
@@ -222,7 +222,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateCallUiState(true);
                 connectionPill.classList.add('live-active');
                 connectionText.textContent = 'Live Audio Call';
-                appendTranscriptMessage('system', 'Connected to front desk. Aria is listening...');
+                appendTranscriptMessage('system', 'Connected to front desk. Jack is listening...');
             };
 
             state.ws.onmessage = (event) => {
@@ -260,7 +260,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function speakAria(text, onComplete) {
+    function speakJack(text, onComplete) {
         if (!('speechSynthesis' in window)) {
             if (onComplete) onComplete();
             return;
@@ -268,7 +268,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             window.speechSynthesis.cancel();
             window.speechSynthesis.resume();
-        } catch (e) {}
+        } catch (e) { }
 
         const utter = new SpeechSynthesisUtterance(text);
         utter.rate = 1.05;
@@ -279,16 +279,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (preferred) utter.voice = preferred;
 
         utter.onstart = () => {
-            state.isAriaSpeaking = true;
-            updateLiveBadge('speaking', 'Aria Speaking');
+            state.isJackSpeaking = true;
+            updateLiveBadge('speaking', 'Jack Speaking');
         };
         utter.onend = () => {
-            state.isAriaSpeaking = false;
+            state.isJackSpeaking = false;
             if (state.isCallActive) updateLiveBadge('listening', 'Listening...');
             if (onComplete) onComplete();
         };
         utter.onerror = () => {
-            state.isAriaSpeaking = false;
+            state.isJackSpeaking = false;
             if (state.isCallActive) updateLiveBadge('listening', 'Listening...');
             if (onComplete) onComplete();
         };
@@ -312,12 +312,12 @@ document.addEventListener('DOMContentLoaded', () => {
         connectionPill.classList.add('live-active');
         connectionText.textContent = 'Voice Assistant';
         updateLiveBadge('listening', 'Listening...');
-        appendTranscriptMessage('system', 'Connected to Aria via Voice Assistant mode. Speak into your microphone!');
+        appendTranscriptMessage('system', 'Connected to Jack via Voice Assistant mode. Speak into your microphone!');
 
         // Greeting
-        const greetingText = "Good day! Welcome to Apex Horizon Enterprises. My name is Aria, your virtual receptionist. How may I assist you today?";
+        const greetingText = "Good day! Welcome to Apex Horizon Enterprises. My name is Jack, your virtual receptionist. How may I assist you today?";
         appendTranscriptMessage('model', greetingText);
-        speakAria(greetingText);
+        speakJack(greetingText);
 
         const recognition = new SpeechRec();
         recognition.continuous = true;
@@ -327,10 +327,10 @@ document.addEventListener('DOMContentLoaded', () => {
         recognition.onresult = async (event) => {
             const last = event.results.length - 1;
             const transcript = event.results[last][0].transcript.trim();
-            if (!transcript || state.isMuted || state.isAriaSpeaking) return;
+            if (!transcript || state.isMuted || state.isJackSpeaking) return;
 
             appendTranscriptMessage('user', transcript);
-            updateLiveBadge('processing', 'Aria Thinking...');
+            updateLiveBadge('processing', 'Jack Thinking...');
 
             try {
                 const res = await fetch('/api/chat', {
@@ -346,7 +346,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!res.ok) throw new Error(data.detail || 'Chat request failed');
 
                 appendTranscriptMessage('model', data.reply);
-                speakAria(data.reply);
+                speakJack(data.reply);
 
                 if (data.actions && data.actions.length > 0) {
                     loadAppointments();
@@ -367,7 +367,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         recognition.onend = () => {
             if (state.isCallActive && state.isSpeechRecognitionMode) {
-                try { recognition.start(); } catch (e) {}
+                try { recognition.start(); } catch (e) { }
             }
         };
 
@@ -446,7 +446,7 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 state.speechRecognition.onend = null;
                 state.speechRecognition.stop();
-            } catch (e) {}
+            } catch (e) { }
             state.speechRecognition = null;
         }
 
@@ -591,7 +591,7 @@ document.addEventListener('DOMContentLoaded', () => {
             updateLiveBadge('processing', 'Thinking...');
         } else {
             // Fallback REST Chat
-            updateLiveBadge('processing', 'Aria Thinking...');
+            updateLiveBadge('processing', 'Jack Thinking...');
             try {
                 const res = await fetch('/api/chat', {
                     method: 'POST',
@@ -610,7 +610,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 appendTranscriptMessage('model', data.reply);
                 updateLiveBadge('idle', 'Standby');
 
-                speakAria(data.reply);
+                speakJack(data.reply);
 
                 // If tools modified data, refresh
                 if (data.actions && data.actions.length > 0) {
@@ -787,7 +787,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Global Action Helpers
-    window.cancelAppointment = async function(id) {
+    window.cancelAppointment = async function (id) {
         if (!confirm('Are you sure you want to cancel this appointment?')) return;
         try {
             const res = await fetch(`/api/appointments/${id}`, { method: 'DELETE' });
@@ -800,7 +800,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    window.markMessageRead = async function(id) {
+    window.markMessageRead = async function (id) {
         try {
             const res = await fetch(`/api/messages/${id}/read`, { method: 'PATCH' });
             if (res.ok) {
@@ -811,7 +811,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    window.deleteMessage = async function(id) {
+    window.deleteMessage = async function (id) {
         try {
             const res = await fetch(`/api/messages/${id}`, { method: 'DELETE' });
             if (res.ok) {

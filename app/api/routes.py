@@ -261,9 +261,9 @@ async def handle_demo_chat(query: str) -> Dict[str, Any]:
 
     # 5. Availability Check
     if any(w in text for w in ["available", "availability", "free", "slot"]):
-        staff = "Marcus Sterling"
-        for name in ["Elena Vance", "Marcus Sterling", "Sarah Jenkins", "Michael Torres"]:
-            if name.lower() in text or name.split()[0].lower() in text:
+        staff = "Rajesh Krishnamurthy"
+        for name in ["Dr. Ananya Sharma", "Rajesh Krishnamurthy", "Meera Iyer", "Vikram Desai", "Priya Nair", "Arjun Mehta", "Kavitha Sundaram", "Rohit Agarwal"]:
+            if name.lower() in text or name.split()[-1].lower() in text:
                 staff = name
                 break
         today_str = date.today().isoformat()
@@ -284,9 +284,9 @@ async def handle_demo_chat(query: str) -> Dict[str, Any]:
 
     # 6. Book appointment
     if any(w in text for w in ["book", "reserve", "schedule"]):
-        staff = "Marcus Sterling"
-        for name in ["Elena Vance", "Marcus Sterling", "Sarah Jenkins", "Michael Torres"]:
-            if name.lower() in text or name.split()[0].lower() in text:
+        staff = "Rajesh Krishnamurthy"
+        for name in ["Dr. Ananya Sharma", "Rajesh Krishnamurthy", "Meera Iyer", "Vikram Desai", "Priya Nair", "Arjun Mehta", "Kavitha Sundaram", "Rohit Agarwal"]:
+            if name.lower() in text or name.split()[-1].lower() in text:
                 staff = name
                 break
         today_str = date.today().isoformat()
@@ -311,9 +311,9 @@ async def handle_demo_chat(query: str) -> Dict[str, Any]:
 
     # 7. Leave message
     if any(w in text for w in ["message", "voicemail", "note"]):
-        staff = "Michael Torres"
-        for name in ["Elena Vance", "Marcus Sterling", "Sarah Jenkins", "Michael Torres"]:
-            if name.lower() in text or name.split()[0].lower() in text:
+        staff = "Arjun Mehta"
+        for name in ["Dr. Ananya Sharma", "Rajesh Krishnamurthy", "Meera Iyer", "Vikram Desai", "Priya Nair", "Arjun Mehta", "Kavitha Sundaram", "Rohit Agarwal"]:
+            if name.lower() in text or name.split()[-1].lower() in text:
                 staff = name
                 break
         res = await leave_message(
@@ -328,6 +328,7 @@ async def handle_demo_chat(query: str) -> Dict[str, Any]:
             "reply": f"I have recorded your message for {staff}. They will be notified and will follow up with you as soon as possible.",
             "actions": actions_taken
         }
+
 
     # 8. Staff directory lookup
     if any(w in text for w in ["directory", "who is", "extension", "contact", "ceo", "engineer", "sales"]):
