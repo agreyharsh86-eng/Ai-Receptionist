@@ -16,17 +16,22 @@ if sys.platform.startswith("win"):
 BASE_DIR = Path(__file__).resolve().parent
 
 if __name__ == "__main__":
+    host = os.getenv("HOST", "0.0.0.0")
+    port = int(os.getenv("PORT", "8000"))
+    reload = os.getenv("RELOAD", "true").lower() in ("true", "1", "yes")
+
+    display_host = "127.0.0.1" if host == "0.0.0.0" else host
     print("\n" + "=" * 65)
     print("  [*] APEX HORIZON ENTERPRISES -- AI VOICE RECEPTIONIST")
     print("=" * 65)
-    print("  Front Desk Web Console: http://127.0.0.1:8000")
-    print("  API Documentation:      http://127.0.0.1:8000/docs")
+    print(f"  Front Desk Web Console: http://{display_host}:{port}")
+    print(f"  API Documentation:      http://{display_host}:{port}/docs")
     print("=" * 65 + "\n")
 
     uvicorn.run(
         "app.main:app",
-        host="127.0.0.1",
-        port=8000,
-        reload=True,
+        host=host,
+        port=port,
+        reload=reload,
         log_level="info"
     )

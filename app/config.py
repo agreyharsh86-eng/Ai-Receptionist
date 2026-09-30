@@ -15,7 +15,7 @@ GEMINI_LIVE_MODEL = os.getenv("GEMINI_LIVE_MODEL", "gemini-3.1-flash-live-previe
 GEMINI_FALLBACK_MODEL = os.getenv("GEMINI_FALLBACK_MODEL", "gemini-2.5-flash")
 DEFAULT_VOICE = os.getenv("DEFAULT_VOICE", "Aoede")  # Options: Aoede, Puck, Charon, Fenrir, Kore
 
-HOST = os.getenv("HOST", "127.0.0.1")
+HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8000"))
 
 # Receptionist Persona Configuration
