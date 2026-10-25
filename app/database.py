@@ -106,6 +106,28 @@ async def init_db():
             )
         """)
 
+        # 6. Doctors Directory
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS doctors (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                specialization TEXT NOT NULL,
+                department TEXT NOT NULL,
+                qualification TEXT NOT NULL,
+                experience_years INTEGER NOT NULL DEFAULT 0,
+                consultation_fee TEXT NOT NULL DEFAULT '₹500',
+                available_days TEXT NOT NULL DEFAULT 'Mon-Fri',
+                available_slots TEXT NOT NULL DEFAULT '09:00 AM - 05:00 PM',
+                rating REAL NOT NULL DEFAULT 4.5,
+                total_reviews INTEGER NOT NULL DEFAULT 0,
+                status TEXT NOT NULL DEFAULT 'Available',
+                phone_extension TEXT NOT NULL DEFAULT '000',
+                email TEXT NOT NULL,
+                bio TEXT,
+                avatar_emoji TEXT NOT NULL DEFAULT '👨‍⚕️'
+            )
+        """)
+
         await db.commit()
 
         # Seed data if empty
@@ -115,7 +137,7 @@ async def init_db():
                 await seed_database(db)
 
 async def seed_database(db):
-    """Seed corporate directory and knowledge base with rich enterprise context."""
+    """Seed corporate directory, doctors, and knowledge base with rich enterprise context."""
     # Seed Company Info
     company_entries = [
         (
@@ -515,6 +537,190 @@ async def seed_database(db):
         (session_id, caller_identifier, started_at, ended_at, duration_seconds, summary, full_transcript, actions_taken)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
         sample_call_logs
+    )
+
+    await db.commit()
+
+    # Seed Doctors Directory — Indian medical professionals
+    doctors_data = [
+        (
+            "Dr. Arun Prakash Sharma",
+            "Cardiology",
+            "Heart & Vascular Centre",
+            "MD, DM (Cardiology), FACC",
+            22,
+            "₹1,500",
+            "Mon, Wed, Fri",
+            "09:00 AM, 10:00 AM, 11:00 AM, 02:00 PM, 03:00 PM",
+            4.9,
+            347,
+            "Available",
+            "1001",
+            "dr.arun.sharma@apexhorizon.com",
+            "Senior interventional cardiologist with 22+ years of experience. Specializes in complex angioplasties, heart failure management, and preventive cardiology. Former Head of Cardiology at AIIMS Delhi.",
+            "🫀"
+        ),
+        (
+            "Dr. Priyanka Venkatesh",
+            "Dermatology",
+            "Skin & Aesthetic Clinic",
+            "MD (Dermatology), DNB, FRCP",
+            15,
+            "₹1,200",
+            "Mon, Tue, Thu, Sat",
+            "10:00 AM, 11:00 AM, 11:30 AM, 02:00 PM, 03:00 PM, 04:00 PM",
+            4.8,
+            512,
+            "Available",
+            "1002",
+            "dr.priyanka.v@apexhorizon.com",
+            "Expert in cosmetic dermatology, laser treatments, hair restoration, and autoimmune skin disorders. Published researcher in psoriasis management.",
+            "🧴"
+        ),
+        (
+            "Dr. Rajiv Malhotra",
+            "Orthopedics",
+            "Bone & Joint Institute",
+            "MS (Ortho), MCh, FICS",
+            18,
+            "₹1,000",
+            "Mon, Tue, Wed, Fri",
+            "09:00 AM, 09:30 AM, 10:30 AM, 01:00 PM, 02:30 PM, 04:00 PM",
+            4.7,
+            289,
+            "Available",
+            "1003",
+            "dr.rajiv.m@apexhorizon.com",
+            "Specializes in knee & hip replacements, sports injuries, arthroscopy, and spine surgeries. Chief orthopedic consultant for Indian Olympic Association.",
+            "🦴"
+        ),
+        (
+            "Dr. Kavitha Raghunathan",
+            "Pediatrics",
+            "Children's Health Centre",
+            "MD (Pediatrics), DCH, FIAP",
+            20,
+            "₹800",
+            "Mon, Tue, Wed, Thu, Fri",
+            "09:00 AM, 10:00 AM, 11:00 AM, 02:00 PM, 03:00 PM, 04:00 PM, 04:30 PM",
+            4.9,
+            623,
+            "Available",
+            "1004",
+            "dr.kavitha.r@apexhorizon.com",
+            "Renowned pediatrician specializing in neonatal care, childhood immunization programs, and developmental disorders. 20+ years caring for children across South India.",
+            "👶"
+        ),
+        (
+            "Dr. Siddharth Joshi",
+            "Neurology",
+            "Brain & Neuroscience Institute",
+            "MD, DM (Neurology), FAAN",
+            16,
+            "₹1,800",
+            "Tue, Thu, Sat",
+            "10:00 AM, 11:00 AM, 01:00 PM, 02:00 PM, 03:30 PM",
+            4.8,
+            198,
+            "In Surgery",
+            "1005",
+            "dr.siddharth.j@apexhorizon.com",
+            "Expert neurologist specializing in epilepsy, movement disorders, stroke rehabilitation, and neuro-oncology. Pioneer in deep brain stimulation procedures in India.",
+            "🧠"
+        ),
+        (
+            "Dr. Meenakshi Sundaram",
+            "Gynecology & Obstetrics",
+            "Women's Health Centre",
+            "MS (OBG), DNB, FRCOG",
+            24,
+            "₹1,200",
+            "Mon, Wed, Thu, Fri",
+            "09:30 AM, 10:30 AM, 11:30 AM, 02:00 PM, 03:00 PM, 04:00 PM",
+            4.9,
+            891,
+            "Available",
+            "1006",
+            "dr.meenakshi.s@apexhorizon.com",
+            "Senior obstetrician and gynecologist with expertise in high-risk pregnancies, laparoscopic surgeries, and fertility treatments. Over 5,000 successful deliveries.",
+            "🤰"
+        ),
+        (
+            "Dr. Harsh Vardhan Patel",
+            "Gastroenterology",
+            "Digestive Health Centre",
+            "MD, DM (Gastro), FACG",
+            14,
+            "₹1,300",
+            "Mon, Tue, Wed, Fri",
+            "09:00 AM, 10:00 AM, 11:00 AM, 01:30 PM, 02:30 PM, 04:00 PM",
+            4.6,
+            267,
+            "Available",
+            "1007",
+            "dr.harsh.p@apexhorizon.com",
+            "Specialist in advanced endoscopy, liver diseases, inflammatory bowel disease, and pancreatic disorders. Known for therapeutic ERCP expertise.",
+            "🩺"
+        ),
+        (
+            "Dr. Anjali Krishnamurthy",
+            "Ophthalmology",
+            "Vision & Eye Care Centre",
+            "MS (Ophthal), DNB, FRCS",
+            17,
+            "₹900",
+            "Mon, Tue, Thu, Sat",
+            "09:00 AM, 10:00 AM, 11:00 AM, 11:30 AM, 02:00 PM, 03:00 PM",
+            4.8,
+            445,
+            "Available",
+            "1008",
+            "dr.anjali.k@apexhorizon.com",
+            "Expert in LASIK surgery, cataract removal, glaucoma management, and retinal disorders. Has performed 10,000+ successful eye surgeries.",
+            "👁️"
+        ),
+        (
+            "Dr. Nikhil Banerjee",
+            "Psychiatry",
+            "Mental Health & Wellness Centre",
+            "MD (Psychiatry), DNB, MRCPsych",
+            12,
+            "₹1,500",
+            "Mon, Wed, Fri, Sat",
+            "10:00 AM, 11:00 AM, 02:00 PM, 03:00 PM, 04:00 PM, 05:00 PM",
+            4.7,
+            334,
+            "Available",
+            "1009",
+            "dr.nikhil.b@apexhorizon.com",
+            "Compassionate psychiatrist specializing in anxiety, depression, OCD, PTSD, and addiction medicine. Certified cognitive behavioral therapy practitioner. Advocates mental health awareness across corporate India.",
+            "🧘"
+        ),
+        (
+            "Dr. Lakshmi Narayanan Iyer",
+            "General Medicine",
+            "Internal Medicine & Diagnostics",
+            "MD (General Medicine), MRCP",
+            25,
+            "₹700",
+            "Mon, Tue, Wed, Thu, Fri, Sat",
+            "08:30 AM, 09:00 AM, 09:30 AM, 10:00 AM, 10:30 AM, 11:00 AM, 02:00 PM, 03:00 PM, 04:00 PM",
+            4.8,
+            1024,
+            "Available",
+            "1010",
+            "dr.lakshmi.i@apexhorizon.com",
+            "Highly experienced general physician and diagnostician. Expert in managing chronic diseases — diabetes, hypertension, thyroid disorders, and infectious diseases. First point of contact for comprehensive health checkups.",
+            "💊"
+        ),
+    ]
+
+    await db.executemany(
+        """INSERT INTO doctors
+        (name, specialization, department, qualification, experience_years, consultation_fee,
+         available_days, available_slots, rating, total_reviews, status, phone_extension, email, bio, avatar_emoji)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        doctors_data
     )
 
     await db.commit()

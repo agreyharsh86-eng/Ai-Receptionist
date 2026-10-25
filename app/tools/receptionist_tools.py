@@ -17,11 +17,57 @@ ALL_SLOTS = [
     "04:00 PM", "04:30 PM"
 ]
 
-async def check_availability(staff_or_department: str, date_str: str) -> Dict[str, Any]:
-    """Check open appointment time slots for a staff member or department on a specific date.
+async def search_doctors(query: str = "", specialization: str = "") -> Dict[str, Any]:
+    """Search available doctors by name, medical specialization, department, or symptoms.
 
     Args:
-        staff_or_department: Name of the employee (e.g. 'Marcus Sterling') or department ('Enterprise Sales').
+        query: Doctor name, medical problem, or symptom (e.g. 'Dr. Arun', 'heart', 'skin', 'chest pain').
+        specialization: Medical field (e.g. 'Cardiology', 'Dermatology', 'Orthopedics', 'Pediatrics', 'Neurology', 'General Medicine').
+    """
+    db = await get_db()
+    try:
+        sql = "SELECT * FROM doctors WHERE 1=1"
+        params = []
+        if query:
+            sql += " AND (name LIKE ? OR specialization LIKE ? OR department LIKE ? OR bio LIKE ?)"
+            params.extend([f"%{query}%", f"%{query}%", f"%{query}%", f"%{query}%"])
+        if specialization:
+            sql += " AND specialization LIKE ?"
+            params.append(f"%{specialization}%")
+        sql += " ORDER BY rating DESC"
+
+        async with db.execute(sql, params) as cursor:
+            rows = await cursor.fetchall()
+
+        doctors = []
+        for r in rows:
+            doctors.append({
+                "id": r["id"],
+                "name": r["name"],
+                "specialization": r["specialization"],
+                "department": r["department"],
+                "qualification": r["qualification"],
+                "experience_years": r["experience_years"],
+                "consultation_fee": r["consultation_fee"],
+                "available_days": r["available_days"],
+                "available_slots": r["available_slots"],
+                "rating": r["rating"],
+                "status": r["status"]
+            })
+
+        return {
+            "status": "success",
+            "count": len(doctors),
+            "doctors": doctors
+        }
+    finally:
+        await db.close()
+
+async def check_availability(staff_or_department: str, date_str: str) -> Dict[str, Any]:
+    """Check open appointment time slots for a staff member, doctor, or department on a specific date.
+
+    Args:
+        staff_or_department: Name of the employee/doctor (e.g. 'Dr. Arun Prakash Sharma', 'Rajesh Krishnamurthy') or department ('Cardiology', 'Enterprise Sales').
         date_str: The requested date in YYYY-MM-DD format (e.g. '2026-09-15').
     """
     db = await get_db()
@@ -33,16 +79,31 @@ async def check_availability(staff_or_department: str, date_str: str) -> Dict[st
         ) as cursor:
             staff_rows = await cursor.fetchall()
 
-        if not staff_rows:
-            return {
-                "status": "not_found",
-                "message": f"No staff member or department matching '{staff_or_department}' was found.",
-                "available_slots": []
-            }
+        matched_name = None
+        matched_dept = None
+        staff_status = "Available"
 
-        matched_name = staff_rows[0]["name"]
-        matched_dept = staff_rows[0]["department"]
-        staff_status = staff_rows[0]["status"]
+        if staff_rows:
+            matched_name = staff_rows[0]["name"]
+            matched_dept = staff_rows[0]["department"]
+            staff_status = staff_rows[0]["status"]
+        else:
+            # Check doctors directory
+            async with db.execute(
+                "SELECT name, specialization, department, status, available_slots FROM doctors WHERE name LIKE ? OR specialization LIKE ? OR department LIKE ?",
+                (f"%{staff_or_department}%", f"%{staff_or_department}%", f"%{staff_or_department}%")
+            ) as cursor:
+                doc_rows = await cursor.fetchall()
+            if doc_rows:
+                matched_name = doc_rows[0]["name"]
+                matched_dept = doc_rows[0]["department"] or doc_rows[0]["specialization"]
+                staff_status = doc_rows[0]["status"]
+            else:
+                return {
+                    "status": "not_found",
+                    "message": f"No staff member or doctor matching '{staff_or_department}' was found.",
+                    "available_slots": []
+                }
 
         # Check existing appointments on this date
         async with db.execute(
@@ -73,29 +134,42 @@ async def book_appointment(
     staff_or_department: str,
     date_str: str,
     time_slot: str,
-    purpose: str = "General Business Consultation"
+    purpose: str = "General Consultation"
 ) -> Dict[str, Any]:
-    """Book and confirm an appointment with a staff member or department.
+    """Book and confirm an appointment with a staff member or doctor.
 
     Args:
-        visitor_name: Full name of the visitor or caller.
+        visitor_name: Full name of the visitor, caller, or patient.
         contact_info: Phone number or email address of the visitor.
-        staff_or_department: Name of the staff member or department.
+        staff_or_department: Name of the staff member, doctor, or department.
         date_str: Date of appointment in YYYY-MM-DD format.
-        time_slot: Time slot (e.g. '02:00 PM', '10:30 AM').
-        purpose: Reason for the visit or meeting.
+        time_slot: Time slot (e.g. '02:00 PM', '10:00 AM').
+        purpose: Reason for the visit, consultation, or symptoms.
     """
     db = await get_db()
     try:
-        # Identify staff
+        # Identify staff or doctor
+        staff_name = staff_or_department
+        dept_name = "General"
+
         async with db.execute(
             "SELECT name, department FROM staff_directory WHERE name LIKE ? OR department LIKE ?",
             (f"%{staff_or_department}%", f"%{staff_or_department}%")
         ) as cursor:
             staff = await cursor.fetchone()
 
-        staff_name = staff["name"] if staff else staff_or_department
-        dept_name = staff["department"] if staff else "General"
+        if staff:
+            staff_name = staff["name"]
+            dept_name = staff["department"]
+        else:
+            async with db.execute(
+                "SELECT name, specialization, department FROM doctors WHERE name LIKE ? OR specialization LIKE ? OR department LIKE ?",
+                (f"%{staff_or_department}%", f"%{staff_or_department}%", f"%{staff_or_department}%")
+            ) as cursor:
+                doc = await cursor.fetchone()
+            if doc:
+                staff_name = doc["name"]
+                dept_name = f"{doc['specialization']} ({doc['department']})"
 
         # Check for conflicts
         async with db.execute(
@@ -324,6 +398,7 @@ async def transfer_call(recipient_or_department: str) -> Dict[str, Any]:
 
 # Tool registry for dynamic execution
 TOOL_REGISTRY = {
+    "search_doctors": search_doctors,
     "check_availability": check_availability,
     "book_appointment": book_appointment,
     "cancel_appointment": cancel_appointment,
@@ -335,6 +410,7 @@ TOOL_REGISTRY = {
 
 # Python functions list for passing to google-genai client
 RECEPTIONIST_TOOL_FUNCTIONS = [
+    search_doctors,
     check_availability,
     book_appointment,
     cancel_appointment,
@@ -343,3 +419,4 @@ RECEPTIONIST_TOOL_FUNCTIONS = [
     get_company_info,
     transfer_call
 ]
+

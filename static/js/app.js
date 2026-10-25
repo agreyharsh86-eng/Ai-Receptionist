@@ -56,6 +56,25 @@ document.addEventListener('DOMContentLoaded', () => {
     const msgCountBadge = document.getElementById('msgCountBadge');
     const directorySearchInput = document.getElementById('directorySearchInput');
 
+    // Doctors Elements
+    const doctorsList = document.getElementById('doctorsList');
+    const doctorCountBadge = document.getElementById('doctorCountBadge');
+    const doctorSearchInput = document.getElementById('doctorSearchInput');
+    const doctorSpecFilter = document.getElementById('doctorSpecFilter');
+
+    // Doctor Booking Modal Elements
+    const bookDoctorModal = document.getElementById('bookDoctorModal');
+    const closeBookDoctorBtn = document.getElementById('closeBookDoctorBtn');
+    const cancelBookDoctorBtn = document.getElementById('cancelBookDoctorBtn');
+    const confirmBookDoctorBtn = document.getElementById('confirmBookDoctorBtn');
+    const bookingDoctorInfo = document.getElementById('bookingDoctorInfo');
+    const bookPatientName = document.getElementById('bookPatientName');
+    const bookPatientContact = document.getElementById('bookPatientContact');
+    const bookApptDate = document.getElementById('bookApptDate');
+    const bookApptSlot = document.getElementById('bookApptSlot');
+    const bookApptPurpose = document.getElementById('bookApptPurpose');
+    let selectedBookingDoctor = null;
+
     // Settings Modal Elements
     const settingsModal = document.getElementById('settingsModal');
     const openSettingsBtn = document.getElementById('openSettingsBtn');
@@ -616,6 +635,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (data.actions && data.actions.length > 0) {
                     loadAppointments();
                     loadMessages();
+                    loadDoctors();
                 }
 
             } catch (err) {
@@ -666,24 +686,31 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            appointmentsList.innerHTML = appts.map(a => `
+            appointmentsList.innerHTML = appts.map(a => {
+                const isDoctor = a.staff_name.startsWith('Dr.') || a.department.includes('Centre') || a.department.includes('Clinic');
+                const roleIcon = isDoctor ? '🩺' : '💼';
+                const label = isDoctor ? 'Consultation with' : 'Meeting with';
+
+                return `
                 <div class="appointment-card">
                     <div class="appointment-header">
-                        <div class="appointment-visitor">${escapeHtml(a.visitor_name)}</div>
-                        <div class="appointment-time">${escapeHtml(a.date)} at ${escapeHtml(a.time_slot)}</div>
+                        <div class="appointment-visitor">👤 ${escapeHtml(a.visitor_name)}</div>
+                        <div class="appointment-time">📅 ${escapeHtml(a.date)} • ⏰ ${escapeHtml(a.time_slot)}</div>
                     </div>
                     <div class="appointment-details">
-                        Meeting with: <strong>${escapeHtml(a.staff_name)}</strong> (${escapeHtml(a.department)})
+                        ${label}: <strong>${roleIcon} ${escapeHtml(a.staff_name)}</strong>
+                        <span style="color: var(--text-muted); font-size: 0.82rem;">(${escapeHtml(a.department)})</span>
                     </div>
                     <div class="appointment-purpose">
-                        "${escapeHtml(a.purpose || 'Business consultation')}"
+                        "${escapeHtml(a.purpose || 'Appointment consultation')}"
                     </div>
                     <div class="appointment-footer">
                         <span class="badge-status ${a.status.toLowerCase()}">${escapeHtml(a.status)}</span>
                         ${a.status !== 'Cancelled' ? `<button class="btn-cancel-appt" onclick="window.cancelAppointment(${a.id})">Cancel</button>` : ''}
                     </div>
                 </div>
-            `).join('');
+            `;
+            }).join('');
         } catch (e) {
             appointmentsList.innerHTML = '<div class="system-notice">Failed to load appointments.</div>';
         }
@@ -783,6 +810,204 @@ document.addEventListener('DOMContentLoaded', () => {
             `).join('');
         } catch (e) {
             logsList.innerHTML = '<div class="system-notice">Failed to load call logs.</div>';
+        }
+    }
+
+    // =========================================================================
+    // Doctors Directory & Booking
+    // =========================================================================
+
+    function generateStars(rating) {
+        const fullStars = Math.floor(rating);
+        const halfStar = rating % 1 >= 0.5;
+        let stars = '★'.repeat(fullStars);
+        if (halfStar) stars += '½';
+        stars += '☆'.repeat(5 - fullStars - (halfStar ? 1 : 0));
+        return stars;
+    }
+
+    async function loadDoctors(searchQuery = '', specialization = '') {
+        try {
+            let url = '/api/doctors';
+            const params = new URLSearchParams();
+            if (searchQuery) params.set('q', searchQuery);
+            if (specialization) params.set('specialization', specialization);
+            if (params.toString()) url += '?' + params.toString();
+
+            const res = await fetch(url);
+            const doctors = await res.json();
+
+            doctorCountBadge.textContent = doctors.filter(d => d.status === 'Available').length;
+
+            if (doctors.length === 0) {
+                doctorsList.innerHTML = '<div class="system-notice">No doctors found matching your criteria.</div>';
+                return;
+            }
+
+            doctorsList.innerHTML = doctors.map(d => {
+                const isAvailable = d.status === 'Available';
+                let statusClass = 'available';
+                if (d.status.includes('Surgery') || d.status.includes('Meeting')) statusClass = 'meeting';
+                else if (d.status.includes('Leave') || d.status.includes('Unavailable')) statusClass = 'away';
+
+                return `
+                    <div class="doctor-card">
+                        <div class="doctor-card-header">
+                            <div class="doctor-avatar">${d.avatar_emoji || '🩺'}</div>
+                            <div class="doctor-header-info">
+                                <h4>${escapeHtml(d.name)}</h4>
+                                <div class="doctor-specialization">${escapeHtml(d.specialization)}</div>
+                                <div class="doctor-qualification">${escapeHtml(d.qualification)}</div>
+                            </div>
+                            <div class="doctor-header-status">
+                                <div class="doctor-rating">
+                                    <span class="stars">${generateStars(d.rating)}</span>
+                                    <span>${d.rating}</span>
+                                </div>
+                                <div class="doctor-reviews">${d.total_reviews} reviews</div>
+                                <span class="status-badge ${statusClass}">${escapeHtml(d.status)}</span>
+                            </div>
+                        </div>
+                        <div class="doctor-body">
+                            <div class="doctor-bio">${escapeHtml(d.bio || '')}</div>
+                            <div class="doctor-meta-row">
+                                <span class="doctor-meta-chip fee"><span class="chip-icon">💰</span> ${escapeHtml(d.consultation_fee)}</span>
+                                <span class="doctor-meta-chip experience"><span class="chip-icon">📅</span> ${d.experience_years} yrs exp</span>
+                                <span class="doctor-meta-chip"><span class="chip-icon">📞</span> Ext. ${escapeHtml(d.phone_extension)}</span>
+                                <span class="doctor-meta-chip"><span class="chip-icon">🏥</span> ${escapeHtml(d.department)}</span>
+                            </div>
+                        </div>
+                        <div class="doctor-footer">
+                            <div class="doctor-availability">
+                                <strong>Available:</strong> ${escapeHtml(d.available_days)}
+                            </div>
+                            <button class="btn-book-doctor" ${!isAvailable ? 'disabled' : ''}
+                                onclick="window.openDoctorBooking(${d.id})">
+                                📋 ${isAvailable ? 'Book Appointment' : 'Unavailable'}
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        } catch (e) {
+            doctorsList.innerHTML = '<div class="system-notice">Failed to load doctors directory.</div>';
+        }
+    }
+
+    async function loadSpecializations() {
+        try {
+            const res = await fetch('/api/doctors/specializations/list');
+            const specs = await res.json();
+            // Only add options if we got specializations
+            if (Array.isArray(specs)) {
+                specs.forEach(spec => {
+                    const opt = document.createElement('option');
+                    opt.value = spec;
+                    opt.textContent = spec;
+                    doctorSpecFilter.appendChild(opt);
+                });
+            }
+        } catch (e) {
+            console.warn('Could not load specializations:', e);
+        }
+    }
+
+    // Store doctors cache for booking modal
+    let doctorsCache = [];
+    async function getDoctorsCache() {
+        if (doctorsCache.length === 0) {
+            try {
+                const res = await fetch('/api/doctors');
+                doctorsCache = await res.json();
+            } catch (e) {
+                doctorsCache = [];
+            }
+        }
+        return doctorsCache;
+    }
+
+    window.openDoctorBooking = async function(doctorId) {
+        const doctors = await getDoctorsCache();
+        const doctor = doctors.find(d => d.id === doctorId);
+        if (!doctor) {
+            showToast('Doctor not found', 'error');
+            return;
+        }
+
+        selectedBookingDoctor = doctor;
+
+        // Populate doctor info in modal
+        bookingDoctorInfo.innerHTML = `
+            <span class="booking-doc-avatar">${doctor.avatar_emoji || '🩺'}</span>
+            <div class="booking-doc-details">
+                <h4>${escapeHtml(doctor.name)}</h4>
+                <p>${escapeHtml(doctor.specialization)} • ${escapeHtml(doctor.department)}</p>
+                <span>${escapeHtml(doctor.consultation_fee)} consultation fee</span>
+            </div>
+        `;
+
+        // Set today's date as default
+        const today = new Date().toISOString().split('T')[0];
+        bookApptDate.value = today;
+        bookApptDate.min = today;
+
+        // Populate available slots
+        const slots = doctor.available_slots.split(',').map(s => s.trim());
+        bookApptSlot.innerHTML = slots.map(s => `<option value="${s}">${s}</option>`).join('');
+
+        // Clear form
+        bookPatientName.value = '';
+        bookPatientContact.value = '';
+        bookApptPurpose.value = '';
+
+        bookDoctorModal.classList.add('active');
+    };
+
+    function closeDoctorBookingModal() {
+        bookDoctorModal.classList.remove('active');
+        selectedBookingDoctor = null;
+    }
+
+    async function confirmDoctorBooking() {
+        if (!selectedBookingDoctor) return;
+
+        const patientName = bookPatientName.value.trim();
+        const contact = bookPatientContact.value.trim();
+        const dateVal = bookApptDate.value;
+        const slotVal = bookApptSlot.value;
+        const purpose = bookApptPurpose.value.trim() || `Consultation with ${selectedBookingDoctor.specialization}`;
+
+        if (!patientName) { showToast('Please enter patient name', 'warning'); return; }
+        if (!contact) { showToast('Please enter contact information', 'warning'); return; }
+        if (!dateVal) { showToast('Please select a date', 'warning'); return; }
+        if (!slotVal) { showToast('Please select a time slot', 'warning'); return; }
+
+        try {
+            const res = await fetch('/api/appointments', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    visitor_name: patientName,
+                    contact_info: contact,
+                    staff_or_department: selectedBookingDoctor.name,
+                    date: dateVal,
+                    time_slot: slotVal,
+                    purpose: purpose
+                })
+            });
+
+            if (res.ok) {
+                showToast(`Appointment booked with ${selectedBookingDoctor.name} on ${dateVal} at ${slotVal}!`, 'success');
+                closeDoctorBookingModal();
+                loadAppointments();
+                // Invalidate cache
+                doctorsCache = [];
+            } else {
+                const err = await res.json();
+                showToast(err.detail || 'Booking failed — slot may be taken', 'error');
+            }
+        } catch (e) {
+            showToast('Failed to book appointment. Please try again.', 'error');
         }
     }
 
@@ -925,6 +1150,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById(target).classList.add('active');
 
             if (target === 'appointmentsTab') loadAppointments();
+            else if (target === 'doctorsTab') loadDoctors();
             else if (target === 'messagesTab') loadMessages();
             else if (target === 'directoryTab') loadDirectory();
             else if (target === 'logsTab') loadCallLogs();
@@ -935,11 +1161,25 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('refreshApptsBtn')?.addEventListener('click', loadAppointments);
     document.getElementById('refreshMsgsBtn')?.addEventListener('click', loadMessages);
     document.getElementById('refreshLogsBtn')?.addEventListener('click', loadCallLogs);
+    document.getElementById('refreshDoctorsBtn')?.addEventListener('click', () => loadDoctors());
 
     // Directory Search
     directorySearchInput.addEventListener('input', (e) => {
         loadDirectory(e.target.value);
     });
+
+    // Doctor Search & Filter
+    doctorSearchInput.addEventListener('input', (e) => {
+        loadDoctors(e.target.value, doctorSpecFilter.value);
+    });
+    doctorSpecFilter.addEventListener('change', () => {
+        loadDoctors(doctorSearchInput.value, doctorSpecFilter.value);
+    });
+
+    // Doctor Booking Modal
+    closeBookDoctorBtn.addEventListener('click', closeDoctorBookingModal);
+    cancelBookDoctorBtn.addEventListener('click', closeDoctorBookingModal);
+    confirmBookDoctorBtn.addEventListener('click', confirmDoctorBooking);
 
     // Settings Modal
     openSettingsBtn.addEventListener('click', openSettingsModal);
@@ -952,4 +1192,6 @@ document.addEventListener('DOMContentLoaded', () => {
     loadAppointments();
     loadMessages();
     loadDirectory();
+    loadDoctors();
+    loadSpecializations();
 });

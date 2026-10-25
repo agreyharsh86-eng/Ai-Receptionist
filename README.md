@@ -19,11 +19,13 @@ Designed for corporate front desks to greet callers and visitors, query corporat
   - `get_company_info`: Answers questions regarding office hours, parking, Wi-Fi, visitor security badges, and dining amenities.
   - `transfer_call`: Simulates routing callers to extensions or departments.
 - **📅 Interactive Front-Desk Management Console**:
-  - **Appointments Hub**: Real-time list of booked visitors with instant live updates when the AI schedules a meeting.
+  - **Appointments Hub**: Real-time list of booked visitors with authentic Indian profiles, status badges, and instant live sync when the AI schedules a consultation.
+  - **Doctors Directory & Medical Consultations**: Specialist doctor cards with specialization filters, consultation fees, patient review ratings, availability schedules, and direct appointment booking.
   - **Caller Messages Inbox**: Centralized message log with urgency tags (Urgent/Normal) and read tracking.
   - **Corporate Staff Directory**: Searchable directory with live availability badges.
   - **Company FAQs & Facility Guidelines**: Pre-loaded corporate knowledge base.
   - **Call History**: Recorded sessions, duration, and transcripts.
+- **🎙️ Voice Command Integration**: Ask for doctors by name or symptom (e.g. *"I need a cardiologist"* or *"Book an appointment with Dr. Arun Prakash Sharma tomorrow at 10 AM for Rahul Verma"*), and the AI automatically looks up availability, books the slot, and syncs the dashboard in real time.
 - **💬 Text & Speech Fallback Mode**: Type directly in the console or use browser speech synthesis if a microphone is not connected.
 - **⚙️ Settings Drawer**: Configure your Gemini API key, select voice persona (`Aoede`, `Puck`, `Charon`, `Fenrir`, `Kore`), and manage connections.
 
