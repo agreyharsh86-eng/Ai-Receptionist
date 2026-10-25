@@ -190,6 +190,12 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // If no Gemini API key is configured and no custom WebSocket URL, use Browser Voice Assistant directly
+        if (!state.apiKey && !state.customWsUrl) {
+            startBrowserVoiceSession();
+            return;
+        }
+
         try {
             // 1. Initialize Audio Player for 24kHz Gemini output
             state.audioPlayer = new window.PcmAudioPlayer(24000);
@@ -334,7 +340,7 @@ document.addEventListener('DOMContentLoaded', () => {
         appendTranscriptMessage('system', 'Connected to Jack via Voice Assistant mode. Speak into your microphone!');
 
         // Greeting
-        const greetingText = "Good day! Welcome to Apex Horizon Enterprises. My name is Jack, your virtual receptionist. How may I assist you today?";
+        const greetingText = "Good day! Welcome to HR Enterprises. My name is Jack, your virtual receptionist. How may I assist you today?";
         appendTranscriptMessage('model', greetingText);
         speakJack(greetingText);
 
@@ -447,6 +453,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 case 'error':
                     showToast(msg.message, 'error');
                     appendTranscriptMessage('system', `Notice: ${msg.message}`);
+                    if (!state.isSpeechRecognitionMode && msg.message && (msg.message.includes('API Key') || msg.message.includes('missing') || msg.message.includes('403') || msg.message.includes('quota'))) {
+                        showToast('Switching to Voice Assistant mode...', 'info');
+                        if (state.ws) {
+                            state.ws.onclose = null;
+                            state.ws.close();
+                            state.ws = null;
+                        }
+                        if (state.audioRecorder) {
+                            state.audioRecorder.stop();
+                            state.audioRecorder = null;
+                        }
+                        if (state.audioPlayer) {
+                            state.audioPlayer.close();
+                            state.audioPlayer = null;
+                        }
+                        startBrowserVoiceSession();
+                    }
                     break;
             }
         } catch (e) {
@@ -495,7 +518,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateLiveBadge('idle', 'Standby');
         connectionPill.classList.remove('live-active');
         connectionText.textContent = 'Ready';
-        appendTranscriptMessage('system', 'Call ended. Thank you for visiting Apex Horizon Enterprises.');
+        appendTranscriptMessage('system', 'Call ended. Thank you for visiting HR Enterprises.');
 
         // Refresh call history
         setTimeout(loadCallLogs, 1200);
@@ -1129,6 +1152,76 @@ document.addEventListener('DOMContentLoaded', () => {
             sendTextMessage(chatInput.value);
         }
     });
+
+    // Quick Voice Mic Button
+    const micVoiceBtn = document.getElementById('micVoiceBtn');
+    let quickRecognition = null;
+    let isQuickListening = false;
+
+    if (micVoiceBtn) {
+        micVoiceBtn.addEventListener('click', () => {
+            const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRec) {
+                showToast('Web Speech is not supported in this browser. Try Chrome or Edge.', 'warning');
+                return;
+            }
+
+            if (isQuickListening) {
+                if (quickRecognition) {
+                    try { quickRecognition.stop(); } catch (e) { }
+                }
+                isQuickListening = false;
+                micVoiceBtn.style.background = 'rgba(255, 255, 255, 0.08)';
+                micVoiceBtn.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+                return;
+            }
+
+            try {
+                quickRecognition = new SpeechRec();
+                quickRecognition.continuous = false;
+                quickRecognition.interimResults = false;
+                quickRecognition.lang = 'en-US';
+
+                quickRecognition.onstart = () => {
+                    isQuickListening = true;
+                    micVoiceBtn.style.background = 'rgba(16, 185, 129, 0.35)';
+                    micVoiceBtn.style.borderColor = 'rgba(16, 185, 129, 0.8)';
+                    showToast('Jack is listening... Speak your question now', 'info');
+                    updateLiveBadge('listening', 'Listening...');
+                };
+
+                quickRecognition.onresult = (event) => {
+                    const text = event.results[0][0].transcript.trim();
+                    if (text) {
+                        chatInput.value = text;
+                        sendTextMessage(text);
+                    }
+                };
+
+                quickRecognition.onerror = (e) => {
+                    console.warn('Mic button error:', e.error);
+                    if (e.error !== 'no-speech') {
+                        showToast(`Microphone notice: ${e.error}`, 'info');
+                    }
+                    isQuickListening = false;
+                    micVoiceBtn.style.background = 'rgba(255, 255, 255, 0.08)';
+                    micVoiceBtn.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+                    updateLiveBadge('idle', 'Standby');
+                };
+
+                quickRecognition.onend = () => {
+                    isQuickListening = false;
+                    micVoiceBtn.style.background = 'rgba(255, 255, 255, 0.08)';
+                    micVoiceBtn.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+                };
+
+                quickRecognition.start();
+            } catch (err) {
+                console.error('Quick voice recognition error:', err);
+                showToast('Microphone access denied or unavailable', 'error');
+            }
+        });
+    }
 
     // Quick suggestion prompt pills
     document.querySelectorAll('.prompt-pill').forEach(pill => {

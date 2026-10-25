@@ -1,8 +1,8 @@
-# 🏢 Apex Horizon Enterprises — Corporate AI Voice Receptionist
+# 🏢 HR Enterprises — Corporate AI Voice Receptionist
 
 An enterprise-grade, real-time Voice AI Receptionist and Front Desk Concierge system powered by **Google Gemini 3.1 Flash Live** (bidirectional low-latency audio streaming) and **FastAPI**.
 
-Designed for corporate front desks to greet callers and visitors, query corporate policies and office directions, inspect staff availability, book and cancel calendar appointments, take detailed caller messages, and route calls.
+Designed for HR Enterprises front desks to greet callers and visitors, query corporate policies and office directions, inspect doctor and staff availability, book and cancel calendar appointments, take detailed caller messages, and route calls.
 
 ---
 

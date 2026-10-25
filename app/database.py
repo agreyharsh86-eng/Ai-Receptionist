@@ -150,7 +150,7 @@ async def seed_database(db):
             "location",
             "Facility",
             "Office Address & Directions",
-            "Apex Horizon Enterprises is located at Tower 4, Suite 1200, 500 Silicon Vista Way, Innovation District. Visitor parking is located on levels P1 and P2 in the West Garage (validated at reception). Public transit: Metro Red Line to Silicon Center Station, Exit B."
+            "HR Enterprises is located at Tower 4, Suite 1200, 500 Silicon Vista Way, Innovation District. Visitor parking is located on levels P1 and P2 in the West Garage (validated at reception). Public transit: Metro Red Line to Silicon Center Station, Exit B."
         ),
         (
             "visitor_policy",
@@ -162,7 +162,7 @@ async def seed_database(db):
             "wifi",
             "Facility",
             "Guest Wi-Fi Network",
-            "High-speed guest Wi-Fi is available across all floors. Network name: 'Apex-Guest'. Password: 'HorizonGuest2026!'. Accept the terms of service on the captive portal to connect."
+            "High-speed guest Wi-Fi is available across all floors. Network name: 'HR-Guest'. Password: 'HRGuest2026!'. Accept the terms of service on the captive portal to connect."
         ),
         (
             "deliveries",
@@ -179,8 +179,8 @@ async def seed_database(db):
         (
             "about",
             "Company",
-            "About Apex Horizon Enterprises",
-            "Apex Horizon Enterprises provides enterprise cloud infrastructure, AI orchestration platforms, and high-performance business solutions for Fortune 500 organizations worldwide."
+            "About HR Enterprises",
+            "HR Enterprises provides enterprise cloud infrastructure, AI orchestration platforms, and high-performance business solutions for global organizations alongside our executive Healthcare & Medical Consultation Centre."
         ),
         (
             "parking",
@@ -207,7 +207,7 @@ async def seed_database(db):
             "Dr. Ananya Sharma",
             "Chief Executive Officer",
             "Executive Leadership",
-            "ananya.sharma@apexhorizon.com",
+            "ananya.sharma@hrenterprises.com",
             "101",
             "In Board Meeting",
             "Oversees strategic direction, investor relations, and global partnerships. 15+ years in enterprise tech leadership. Urgent executive matters should be directed to executive assistant."
@@ -216,7 +216,7 @@ async def seed_database(db):
             "Rajesh Krishnamurthy",
             "VP of Enterprise Sales",
             "Enterprise Sales",
-            "rajesh.k@apexhorizon.com",
+            "rajesh.k@hrenterprises.com",
             "201",
             "Available",
             "Leads enterprise client accounts across APAC and Americas. Handles pricing negotiations, enterprise software demo bookings, and strategic alliances."
@@ -225,7 +225,7 @@ async def seed_database(db):
             "Meera Iyer",
             "Senior Solutions Architect",
             "Enterprise Sales",
-            "meera.iyer@apexhorizon.com",
+            "meera.iyer@hrenterprises.com",
             "204",
             "In Client Call",
             "Technical architecture consultations, cloud migrations, and proof-of-concept demos for enterprise clients."
@@ -234,7 +234,7 @@ async def seed_database(db):
             "Vikram Desai",
             "Head of Engineering & Cloud",
             "Engineering",
-            "vikram.desai@apexhorizon.com",
+            "vikram.desai@hrenterprises.com",
             "301",
             "Available",
             "Directs core platform engineering, cloud reliability, AI infrastructure, and DevOps. Previously at Google Cloud and Infosys."
@@ -243,7 +243,7 @@ async def seed_database(db):
             "Priya Nair",
             "Director of People & Talent",
             "Human Resources",
-            "priya.nair@apexhorizon.com",
+            "priya.nair@hrenterprises.com",
             "401",
             "Available",
             "Handles executive recruiting, job applicant interviews, campus hiring programs, and vendor HR inquiries."
@@ -252,7 +252,7 @@ async def seed_database(db):
             "Arjun Mehta",
             "Senior Financial Controller",
             "Finance & Billing",
-            "arjun.mehta@apexhorizon.com",
+            "arjun.mehta@hrenterprises.com",
             "501",
             "Out of Office",
             "Manages vendor invoicing, enterprise accounts receivable, audits, and billing inquiries. Returns next Monday."
@@ -261,7 +261,7 @@ async def seed_database(db):
             "Kavitha Sundaram",
             "Lead Support Engineer",
             "Client Technical Support",
-            "kavitha.s@apexhorizon.com",
+            "kavitha.s@hrenterprises.com",
             "601",
             "Available",
             "Handles tier-3 technical escalations, SLA client emergencies, and system uptime alerts. On-call rotation lead."
@@ -270,7 +270,7 @@ async def seed_database(db):
             "Rohit Agarwal",
             "Senior Product Manager",
             "Product Management",
-            "rohit.agarwal@apexhorizon.com",
+            "rohit.agarwal@hrenterprises.com",
             "701",
             "Available",
             "Leads product roadmap for AI orchestration platform. Coordinates between engineering, design, and enterprise clients."
@@ -279,7 +279,7 @@ async def seed_database(db):
             "Deepa Venkatesh",
             "Chief Marketing Officer",
             "Marketing & Communications",
-            "deepa.v@apexhorizon.com",
+            "deepa.v@hrenterprises.com",
             "801",
             "In Team Standup",
             "Oversees brand strategy, digital campaigns, analyst relations, and corporate communications."
@@ -288,7 +288,7 @@ async def seed_database(db):
             "Suresh Reddy",
             "Director of IT & Security",
             "Information Technology",
-            "suresh.reddy@apexhorizon.com",
+            "suresh.reddy@hrenterprises.com",
             "901",
             "Available",
             "Manages enterprise IT infrastructure, cybersecurity operations, compliance certifications, and network operations center."
@@ -487,7 +487,7 @@ async def seed_database(db):
             (datetime.now() - timedelta(hours=6, minutes=22)).isoformat(),
             480,
             "Caller inquired about enterprise cloud platform pricing for a multi-hospital deployment. Transferred to Rajesh Krishnamurthy (Enterprise Sales). Appointment booked for today at 9:30 AM.",
-            "Caller: Hello, I'd like to discuss pricing for deploying your cloud platform across our hospital network.\\nJack: Welcome to Apex Horizon Enterprises! I'd be happy to connect you with our Enterprise Sales team. Let me check availability for Rajesh Krishnamurthy.\\nCaller: That would be great, we have 8 facilities.\\nJack: I've booked an appointment with Rajesh for today at 9:30 AM. Shall I transfer you now?\\nCaller: Yes please. Thank you!",
+            "Caller: Hello, I'd like to discuss pricing for deploying your cloud platform across our hospital network.\\nJack: Welcome to HR Enterprises! I'd be happy to connect you with our Enterprise Sales team. Let me check availability for Rajesh Krishnamurthy.\\nCaller: That would be great, we have 8 facilities.\\nJack: I've booked an appointment with Rajesh for today at 9:30 AM. Shall I transfer you now?\\nCaller: Yes please. Thank you!",
             '[{"tool":"check_availability","args":{"staff":"Rajesh Krishnamurthy"}},{"tool":"book_appointment","args":{"visitor":"Amit Kulkarni","slot":"09:30 AM"}},{"tool":"transfer_call","args":{"recipient":"Rajesh Krishnamurthy"}}]'
         ),
         (
@@ -527,7 +527,7 @@ async def seed_database(db):
             (datetime.now() - timedelta(hours=7, minutes=52)).isoformat(),
             480,
             "General inquiry about office hours, visitor parking, and guest Wi-Fi. All information provided from knowledge base.",
-            "Caller: What are your office hours and where can I park?\\nJack: Our office is open Monday through Friday, 8:30 AM to 5:30 PM EST. Visitor parking is available on levels P1 and P2 in the West Garage — just bring your ticket to reception for complimentary validation.\\nCaller: And is there guest Wi-Fi?\\nJack: Yes! Connect to 'Apex-Guest' with password 'HorizonGuest2026!' and accept the terms on the portal.",
+            "Caller: What are your office hours and where can I park?\\nJack: Our office is open Monday through Friday, 8:30 AM to 5:30 PM EST. Visitor parking is available on levels P1 and P2 in the West Garage — just bring your ticket to reception for complimentary validation.\\nCaller: And is there guest Wi-Fi?\\nJack: Yes! Connect to 'HR-Guest' with password 'HRGuest2026!' and accept the terms on the portal.",
             '[{"tool":"get_company_info","args":{"topic":"hours"}},{"tool":"get_company_info","args":{"topic":"parking"}},{"tool":"get_company_info","args":{"topic":"wifi"}}]'
         ),
     ]
@@ -556,7 +556,7 @@ async def seed_database(db):
             347,
             "Available",
             "1001",
-            "dr.arun.sharma@apexhorizon.com",
+            "dr.arun.sharma@hrenterprises.com",
             "Senior interventional cardiologist with 22+ years of experience. Specializes in complex angioplasties, heart failure management, and preventive cardiology. Former Head of Cardiology at AIIMS Delhi.",
             "🫀"
         ),
@@ -573,7 +573,7 @@ async def seed_database(db):
             512,
             "Available",
             "1002",
-            "dr.priyanka.v@apexhorizon.com",
+            "dr.priyanka.v@hrenterprises.com",
             "Expert in cosmetic dermatology, laser treatments, hair restoration, and autoimmune skin disorders. Published researcher in psoriasis management.",
             "🧴"
         ),
@@ -590,7 +590,7 @@ async def seed_database(db):
             289,
             "Available",
             "1003",
-            "dr.rajiv.m@apexhorizon.com",
+            "dr.rajiv.m@hrenterprises.com",
             "Specializes in knee & hip replacements, sports injuries, arthroscopy, and spine surgeries. Chief orthopedic consultant for Indian Olympic Association.",
             "🦴"
         ),
@@ -607,7 +607,7 @@ async def seed_database(db):
             623,
             "Available",
             "1004",
-            "dr.kavitha.r@apexhorizon.com",
+            "dr.kavitha.r@hrenterprises.com",
             "Renowned pediatrician specializing in neonatal care, childhood immunization programs, and developmental disorders. 20+ years caring for children across South India.",
             "👶"
         ),
@@ -624,7 +624,7 @@ async def seed_database(db):
             198,
             "In Surgery",
             "1005",
-            "dr.siddharth.j@apexhorizon.com",
+            "dr.siddharth.j@hrenterprises.com",
             "Expert neurologist specializing in epilepsy, movement disorders, stroke rehabilitation, and neuro-oncology. Pioneer in deep brain stimulation procedures in India.",
             "🧠"
         ),
@@ -641,7 +641,7 @@ async def seed_database(db):
             891,
             "Available",
             "1006",
-            "dr.meenakshi.s@apexhorizon.com",
+            "dr.meenakshi.s@hrenterprises.com",
             "Senior obstetrician and gynecologist with expertise in high-risk pregnancies, laparoscopic surgeries, and fertility treatments. Over 5,000 successful deliveries.",
             "🤰"
         ),
@@ -658,7 +658,7 @@ async def seed_database(db):
             267,
             "Available",
             "1007",
-            "dr.harsh.p@apexhorizon.com",
+            "dr.harsh.p@hrenterprises.com",
             "Specialist in advanced endoscopy, liver diseases, inflammatory bowel disease, and pancreatic disorders. Known for therapeutic ERCP expertise.",
             "🩺"
         ),
@@ -675,7 +675,7 @@ async def seed_database(db):
             445,
             "Available",
             "1008",
-            "dr.anjali.k@apexhorizon.com",
+            "dr.anjali.k@hrenterprises.com",
             "Expert in LASIK surgery, cataract removal, glaucoma management, and retinal disorders. Has performed 10,000+ successful eye surgeries.",
             "👁️"
         ),
@@ -692,7 +692,7 @@ async def seed_database(db):
             334,
             "Available",
             "1009",
-            "dr.nikhil.b@apexhorizon.com",
+            "dr.nikhil.b@hrenterprises.com",
             "Compassionate psychiatrist specializing in anxiety, depression, OCD, PTSD, and addiction medicine. Certified cognitive behavioral therapy practitioner. Advocates mental health awareness across corporate India.",
             "🧘"
         ),
@@ -709,7 +709,7 @@ async def seed_database(db):
             1024,
             "Available",
             "1010",
-            "dr.lakshmi.i@apexhorizon.com",
+            "dr.lakshmi.i@hrenterprises.com",
             "Highly experienced general physician and diagnostician. Expert in managing chronic diseases — diabetes, hypertension, thyroid disorders, and infectious diseases. First point of contact for comprehensive health checkups.",
             "💊"
         ),

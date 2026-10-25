@@ -20,7 +20,7 @@ PORT = int(os.getenv("PORT", "8000"))
 
 # Receptionist Persona Configuration
 RECEPTIONIST_NAME = "Jack"
-COMPANY_NAME = "Apex Horizon Enterprises"
-COMPANY_INDUSTRY = "Enterprise Cloud & AI Solutions"
+COMPANY_NAME = "HR Enterprises"
+COMPANY_INDUSTRY = "Enterprise Cloud, AI Solutions & Healthcare Consultation"
 COMPANY_LOCATION = "Tower 4, Suite 1200, 500 Silicon Vista Way, Innovation District"
 COMPANY_HOURS = "Monday to Friday: 8:30 AM – 5:30 PM EST. Saturday & Sunday: Closed."

@@ -280,64 +280,199 @@ async def handle_demo_chat(query: str) -> Dict[str, Any]:
     text = query.strip().lower()
     actions_taken = []
 
-    # 1. Greetings (word boundaries to prevent "which" matching "hi")
+    # 1. Identity & Persona ("Who are you", "What is your name", "Who is Jack")
+    if any(p in text for p in ["who are you", "what is your name", "what's your name", "who is jack", "tell me about yourself", "your name", "introduce yourself"]):
+        return {
+            "reply": f"Hello! My name is {config.RECEPTIONIST_NAME}, the AI Front Desk Concierge and Executive Receptionist for {config.COMPANY_NAME}. I am here to assist you with booking doctor consultations, checking executive staff schedules, guiding you around our corporate offices, answering company inquiries, or logging messages. How may I assist you today?",
+            "actions": []
+        }
+
+    # 2. Capabilities & Help ("What can you do", "Help me", "How does this work")
+    if any(p in text for p in ["what can you do", "help me", "how do you work", "how does this work", "what are your features", "what can i do", "what are my options"]):
+        return {
+            "reply": f"At {config.COMPANY_NAME}, I can help you with: 1) Searching and booking consultations with our 10 specialist doctors across Cardiology, Dermatology, Orthopedics, Pediatrics, Neurology, and more. 2) Checking staff availability and scheduling business meetings with our leadership team. 3) Providing office hours, guest Wi-Fi, visitor parking validation, and directions. 4) Leaving urgent messages and voicemails. How can I help you right now?",
+            "actions": []
+        }
+
+    # 3. About Company ("What is HR Enterprises", "About the company", "What do you do", "Services")
+    if any(p in text for p in ["what is hr enterprises", "about hr enterprises", "about the company", "what company is this", "tell me about hr enterprises", "what do you do", "what services", "what products", "company info"]):
+        return {
+            "reply": f"{config.COMPANY_NAME} provides enterprise cloud infrastructure, AI orchestration platforms, and high-performance business solutions for global organizations, alongside our dedicated Healthcare & Medical Consultation Centre featuring 10 top specialist doctors. Our corporate headquarters is located at {config.COMPANY_LOCATION}. How can I assist you further?",
+            "actions": [{"tool": "get_company_info", "args": {"topic": "about"}}]
+        }
+
+    # 4. CEO & Executive Leadership Inquiries
+    if any(p in text for p in ["who is the ceo", "who is the boss", "founder", "head of company", "president", "ananya sharma"]):
+        return {
+            "reply": f"Dr. Ananya Sharma is the Chief Executive Officer of {config.COMPANY_NAME}. She oversees strategic direction, investor relations, and enterprise partnerships. Would you like me to check her availability or leave a message for her office?",
+            "actions": [{"tool": "lookup_directory", "args": {"query": "Ananya Sharma"}}]
+        }
+
+    # 5. Pleasantries & Conversational Etiquette
+    if any(p in text for p in ["how are you", "how are you doing", "how's it going", "how do you do"]):
+        return {
+            "reply": f"I'm doing wonderful, thank you for asking! I'm ready to assist you with any questions, appointments, or medical consultations at {config.COMPANY_NAME}. What can I do for you?",
+            "actions": []
+        }
+
+    if any(p in text for p in ["thank you", "thanks", "appreciate it", "thank u", "many thanks", "thanks a lot"]):
+        return {
+            "reply": f"You're very welcome! It's always my pleasure to assist you at {config.COMPANY_NAME}. Please let me know if there is anything else I can do for you.",
+            "actions": []
+        }
+
+    if any(p in text for p in ["bye", "goodbye", "see you", "have a good day", "have a nice day", "good night", "take care"]):
+        return {
+            "reply": f"Thank you for contacting {config.COMPANY_NAME}. Have a wonderful day ahead, and please reach out anytime you need assistance!",
+            "actions": []
+        }
+
+    if any(p in text for p in ["are you human", "are you an ai", "are you a bot", "are you real"]):
+        return {
+            "reply": f"I am {config.RECEPTIONIST_NAME}, an AI-powered conversational receptionist built for {config.COMPANY_NAME}. I understand voice commands, schedule appointments, and coordinate front-desk logistics in real time.",
+            "actions": []
+        }
+
+    # 6. Basic Greetings (word boundaries)
     is_greeting = any(re.search(r'\b' + re.escape(w) + r'\b', text) for w in ["hello", "hi", "hey", "good morning", "good afternoon", "greetings"])
-    has_specific_intent = any(w in text for w in ["doctor", "dr.", "dr ", "specialist", "appointment", "book", "available", "schedule", "hours", "parking", "where", "location", "wifi", "message", "directory"])
+    has_specific_intent = any(w in text for w in ["doctor", "dr.", "dr ", "specialist", "appointment", "book", "available", "schedule", "hours", "parking", "where", "location", "wifi", "message", "directory", "fee", "pain", "fever", "sick"])
     if is_greeting and (len(text.split()) <= 3 or not has_specific_intent):
         return {
             "reply": f"Good day! Welcome to {config.COMPANY_NAME}. My name is {config.RECEPTIONIST_NAME}. How may I direct your call or assist you today?",
             "actions": []
         }
 
-    # 2. Hours & Schedule
-    if any(w in text for w in ["hour", "open", "close", "timing"]):
+    # 7. Hours & Schedule
+    if any(w in text for w in ["hour", "open", "close", "timing", "when are you open"]):
         res = await get_company_info(topic="hours")
         return {
-            "reply": f"Our corporate headquarters is open Monday to Friday from 8:30 AM to 5:30 PM EST. We are closed on weekends. How else may I assist you?",
+            "reply": f"Our corporate office is open Monday to Friday from 8:30 AM to 5:30 PM EST. We are closed on weekends. How else may I assist you?",
             "actions": [{"tool": "get_company_info", "args": {"topic": "hours"}}]
         }
 
-    # 3. Location, Address, Parking
-    if any(w in text for w in ["location", "address", "where", "direction", "parking"]):
-        topic = "parking" if "parking" in text else "location"
-        res = await get_company_info(topic=topic)
+    def get_info_detail(info_res: Dict[str, Any], fallback: str = "") -> str:
+        if isinstance(info_res, dict) and info_res.get("results") and len(info_res["results"]) > 0:
+            return info_res["results"][0].get("details", fallback)
+        return fallback
+
+    # 8. Cafeteria, Dining & Amenities
+    if any(w in text for w in ["cafeteria", "canteen", "coffee", "cafe", "bistro", "food", "lunch", "breakfast", "eat", "dining", "tea"]):
+        res = await get_company_info(topic="amenities")
+        detail = get_info_detail(res, "The 4th Floor Sky Lounge Bistro offers artisan coffee, breakfast, and lunch from 7:30 AM to 3:00 PM.")
         return {
-            "reply": f"{res.get('content')}. How may I help you further?",
+            "reply": f"{detail} It is open to all visitors and staff.",
+            "actions": [{"tool": "get_company_info", "args": {"topic": "amenities"}}]
+        }
+
+    # 9. Location, Address, Parking & Transit
+    if any(w in text for w in ["location", "address", "where", "direction", "directions", "parking", "garage", "subway", "metro", "transit"]):
+        topic = "parking" if "parking" in text or "garage" in text else "location"
+        res = await get_company_info(topic=topic)
+        detail = get_info_detail(res, f"{config.COMPANY_NAME} is located at {config.COMPANY_LOCATION}.")
+        return {
+            "reply": f"{detail} How may I help you further?",
             "actions": [{"tool": "get_company_info", "args": {"topic": topic}}]
         }
 
-    # 4. Wi-Fi / Badges / Security
-    if any(w in text for w in ["wifi", "wi-fi", "internet", "badge", "security"]):
-        topic = "wifi" if ("wifi" in text or "wi-fi" in text) else "security"
+    # 10. Wi-Fi & Guest Badges / Security
+    if any(w in text for w in ["wifi", "wi-fi", "internet", "password", "network", "badge", "security", "pass", "id required"]):
+        topic = "wifi" if any(k in text for k in ["wifi", "wi-fi", "internet", "password", "network"]) else "visitor_policy"
         res = await get_company_info(topic=topic)
+        detail = get_info_detail(res, "High-speed guest Wi-Fi is available across all floors. Network name: 'HR-Guest'. Password: 'HRGuest2026!'.")
         return {
-            "reply": f"{res.get('content')}",
+            "reply": detail,
             "actions": [{"tool": "get_company_info", "args": {"topic": topic}}]
         }
 
-    # 5. Doctor Lookup & Appointment Booking via Voice (Prioritized before staff)
+    # 11. Courier, Deliveries & Packages
+    if any(w in text for w in ["courier", "delivery", "deliveries", "package", "mail", "fedex", "ups", "dhl", "dropoff"]):
+        res = await get_company_info(topic="deliveries")
+        detail = get_info_detail(res, "Deliveries should be directed to the Central Loading Dock on B1 between 8:00 AM and 4:30 PM.")
+        return {
+            "reply": detail,
+            "actions": [{"tool": "get_company_info", "args": {"topic": "deliveries"}}]
+        }
+
+    # 12. View / Check Existing Appointments
+    is_view_appointments = (
+        any(w in text for w in ["appointment", "appointments", "booking", "bookings"]) and
+        any(w in text for w in ["show", "view", "list", "check", "see", "status", "all", "upcoming", "scheduled", "my", "any", "what are"]) and
+        not any(w in text for w in ["cancel", "book", "reserve"])
+    )
+    if is_view_appointments:
+        db = await get_db()
+        try:
+            async with db.execute("SELECT visitor_name, staff_name, date, time_slot, status FROM appointments WHERE status != 'Cancelled' ORDER BY date ASC LIMIT 4") as cur:
+                rows = await cur.fetchall()
+            if rows:
+                appts_text = "; ".join([f"{r['visitor_name']} with {r['staff_name']} on {r['date']} at {r['time_slot']}" for r in rows])
+                return {
+                    "reply": f"Here are the scheduled appointments: {appts_text}. You can view and manage all bookings in the Appointments tab on the right.",
+                    "actions": [{"tool": "list_appointments", "args": {}}]
+                }
+            else:
+                return {
+                    "reply": "There are currently no active appointments scheduled. Would you like me to book one for you?",
+                    "actions": []
+                }
+        finally:
+            await db.close()
+
+    # 13. Cancel Appointment
+    if any(w in text for w in ["cancel appointment", "cancel booking", "cancel my", "cancel an appointment"]):
+        db = await get_db()
+        try:
+            async with db.execute("SELECT id, visitor_name, staff_name, date, time_slot FROM appointments WHERE status = 'Confirmed' ORDER BY id DESC LIMIT 1") as cur:
+                row = await cur.fetchone()
+            if row:
+                await db.execute("UPDATE appointments SET status = 'Cancelled' WHERE id = ?", (row['id'],))
+                await db.commit()
+                actions_taken.append({"tool": "cancel_appointment", "args": {"id": row['id']}})
+                return {
+                    "reply": f"The appointment for {row['visitor_name']} with {row['staff_name']} on {row['date']} at {row['time_slot']} has been successfully cancelled.",
+                    "actions": actions_taken
+                }
+            else:
+                return {
+                    "reply": "I couldn't find an active confirmed appointment to cancel. You can view all bookings in the Appointments tab.",
+                    "actions": []
+                }
+        finally:
+            await db.close()
+
+    # 14. Doctor Lookup, Symptom Guidance & Appointment Booking (Prioritized)
+    all_doctors = [
+        ("Dr. Arun Prakash Sharma", ["arun", "sharma", "cardiologist", "cardiology", "heart", "chest pain", "bp", "blood pressure", "cholesterol"]),
+        ("Dr. Priyanka Venkatesh", ["priyanka", "venkatesh", "dermatologist", "dermatology", "skin", "acne", "rash", "pimples", "hair fall", "hair loss"]),
+        ("Dr. Rajiv Malhotra", ["rajiv", "malhotra", "orthopedic", "orthopedics", "bone", "joint", "knee", "knee pain", "back pain", "fracture"]),
+        ("Dr. Kavitha Raghunathan", ["kavitha", "raghunathan", "pediatric", "pediatrician", "pediatrics", "child", "children", "baby", "infant", "vaccination"]),
+        ("Dr. Siddharth Joshi", ["siddharth", "joshi", "neurologist", "neurology", "brain", "spine", "headache", "migraine", "seizure", "paralysis"]),
+        ("Dr. Meenakshi Sundaram", ["meenakshi", "sundaram", "gynecologist", "gynecology", "women", "obstetrics", "pregnancy", "period", "periods"]),
+        ("Dr. Harsh Vardhan Patel", ["harsh", "patel", "gastro", "gastroenterologist", "gastroenterology", "stomach", "liver", "acidity", "indigestion", "gas"]),
+        ("Dr. Anjali Krishnamurthy", ["anjali", "krishnamurthy", "ophthalmologist", "ophthalmology", "eye", "eyes", "vision", "glasses", "cataract", "lasik"]),
+        ("Dr. Nikhil Banerjee", ["nikhil", "banerjee", "psychiatrist", "psychiatry", "mental", "wellness", "therapy", "depression", "anxiety", "stress", "sleep"]),
+        ("Dr. Lakshmi Narayanan Iyer", ["lakshmi", "iyer", "general physician", "physician", "general medicine", "fever", "checkup", "cold", "cough", "diabetes", "sugar", "sick", "weak", "tooth", "toothache", "teeth", "gum", "gums", "dentist", "dental", "throat", "pain"])
+    ]
+
     doctor_keywords = [
         "doctor", "doctors", "dr.", "dr ", "specialist", "physician", "cardiologist", "dermatologist",
         "orthopedic", "pediatric", "pediatrician", "neurologist", "gynecologist", "gastro",
-        "gastroenterologist", "ophthalmologist", "psychiatrist", "eye doctor", "skin doctor", "bone doctor",
-        "heart doctor", "child doctor", "brain doctor", "general physician",
-        "cardiology", "dermatology", "orthopedics", "pediatrics", "neurology",
-        "gynecology", "gastroenterology", "ophthalmology", "psychiatry", "general medicine",
-        "consult", "consultation", "patient", "clinic", "hospital", "treatment"
+        "gastroenterologist", "ophthalmologist", "psychiatrist", "general physician",
+        "consult", "consultation", "patient", "clinic", "hospital", "treatment",
+        "headache", "fever", "chest pain", "back pain", "knee pain", "cough", "cold", "stomach", "acne", "rash", "migraine",
+        "tooth", "toothache", "teeth", "gum", "gums", "throat"
     ]
 
-    all_doctors = [
-        ("Dr. Arun Prakash Sharma", ["arun", "sharma", "cardiologist", "cardiology", "heart"]),
-        ("Dr. Priyanka Venkatesh", ["priyanka", "venkatesh", "dermatologist", "dermatology", "skin"]),
-        ("Dr. Rajiv Malhotra", ["rajiv", "malhotra", "orthopedic", "orthopedics", "bone", "joint"]),
-        ("Dr. Kavitha Raghunathan", ["kavitha", "raghunathan", "pediatric", "pediatrician", "pediatrics", "child", "children"]),
-        ("Dr. Siddharth Joshi", ["siddharth", "joshi", "neurologist", "neurology", "brain", "spine"]),
-        ("Dr. Meenakshi Sundaram", ["meenakshi", "sundaram", "gynecologist", "gynecology", "women", "obstetrics"]),
-        ("Dr. Harsh Vardhan Patel", ["harsh", "patel", "gastro", "gastroenterologist", "gastroenterology", "stomach", "liver"]),
-        ("Dr. Anjali Krishnamurthy", ["anjali", "krishnamurthy", "ophthalmologist", "ophthalmology", "eye", "vision"]),
-        ("Dr. Nikhil Banerjee", ["nikhil", "banerjee", "psychiatrist", "psychiatry", "mental", "wellness", "therapy"]),
-        ("Dr. Lakshmi Narayanan Iyer", ["lakshmi", "iyer", "general physician", "physician", "general medicine", "fever", "checkup"])
-    ]
+    is_list_doctors = (
+        any(p in text for p in ["which doctors", "who are the doctors", "list doctors", "all doctors", "available doctors", "what doctors", "show doctors", "view doctors", "names of doctors"]) or
+        ("doctor" in text and "available" in text and not any(w in text for w in ["book", "reserve"]))
+    )
+
+    if is_list_doctors:
+        return {
+            "reply": f"At {config.COMPANY_NAME}, we have 10 top specialist doctors available:\n• Dr. Arun Prakash Sharma (Cardiologist)\n• Dr. Priyanka Venkatesh (Dermatologist)\n• Dr. Rajiv Malhotra (Orthopedic Surgeon)\n• Dr. Kavitha Raghunathan (Pediatrician)\n• Dr. Siddharth Joshi (Neurologist)\n• Dr. Meenakshi Sundaram (Gynecologist)\n• Dr. Harsh Vardhan Patel (Gastroenterologist)\n• Dr. Anjali Krishnamurthy (Ophthalmologist)\n• Dr. Nikhil Banerjee (Psychiatrist)\n• Dr. Lakshmi Narayanan Iyer (General Physician)\n\nYou can browse full profiles in the Doctors tab. Which specialist would you like to consult?",
+            "actions": [{"tool": "search_doctors", "args": {"query": "all"}}]
+        }
 
     # First extract patient name if present (e.g. "for Rahul Verma" or "for Vikram Sharma")
     patient_name = "Guest Patient"
@@ -347,7 +482,6 @@ async def handle_demo_chat(query: str) -> Dict[str, Any]:
         if extracted.lower() not in ["an appointment", "appointment", "doctor", "consultation", "me", "him", "her"]:
             patient_name = extracted.title()
 
-    # Search for doctor excluding the patient's name
     searchable_text = text
     if patient_name.lower() in searchable_text:
         searchable_text = searchable_text.replace(patient_name.lower(), "")
@@ -369,7 +503,7 @@ async def handle_demo_chat(query: str) -> Dict[str, Any]:
             if matched_doc:
                 break
 
-    # 3. Check medical specialization
+    # 3. Check medical symptoms / specialization
     if not matched_doc:
         for doc_name, keywords in all_doctors:
             for kw in keywords[2:]:
@@ -379,14 +513,18 @@ async def handle_demo_chat(query: str) -> Dict[str, Any]:
             if matched_doc:
                 break
 
+    is_booking = (
+        any(w in text for w in ["book", "reserve"]) or
+        any(p in text for p in ["take an appointment", "make an appointment", "schedule an appointment", "fix an appointment"])
+    )
+
     is_doctor_query = matched_doc is not None or any(w in text for w in doctor_keywords)
 
     if is_doctor_query:
         # Check if user wants to book an appointment with a doctor
-        if any(w in text for w in ["book", "reserve", "schedule", "fix", "take appointment", "appointment"]):
+        if is_booking:
             target_doctor = matched_doc or "Dr. Arun Prakash Sharma"
 
-            # Parse date: check for 'tomorrow'
             appt_date = date.today().isoformat()
             if "tomorrow" in text:
                 appt_date = (date.today() + timedelta(days=1)).isoformat()
@@ -395,29 +533,18 @@ async def handle_demo_chat(query: str) -> Dict[str, Any]:
                 if date_match:
                     appt_date = date_match.group(1)
 
-            # Parse time slot
             slot = "10:00 AM"
             for s in ["09:00 AM", "09:30 AM", "10:00 AM", "10:30 AM", "11:00 AM", "11:30 AM", "01:00 PM", "02:00 PM", "02:30 PM", "03:00 PM", "03:30 PM", "04:00 PM", "04:30 PM"]:
                 if s.lower() in text:
                     slot = s
                     break
             else:
-                # Regex for hours like "10 am", "2 pm", "11:30 am"
                 t_match = re.search(r'\b(0?[1-9]|1[0-2])(?::([0-5][0-9]))?\s*(am|pm)\b', text)
                 if t_match:
                     hr = int(t_match.group(1))
                     mn = t_match.group(2) or "00"
                     period = t_match.group(3).upper()
                     slot = f"{hr:02d}:{mn} {period}"
-
-            # Parse patient name
-            patient_name = "Guest Patient"
-            name_match = re.search(r'(?:for|patient|name is)\s+([A-Za-z\s]+?)(?:\s+tomorrow|\s+today|\s+at|\s+on|\s*$)', query, re.IGNORECASE)
-            if name_match:
-                extracted = name_match.group(1).strip()
-                # Exclude common false positives
-                if extracted.lower() not in ["an appointment", "appointment", "doctor", "consultation", "me", "him", "her"]:
-                    patient_name = extracted.title()
 
             res = await book_appointment(
                 visitor_name=patient_name,
@@ -432,7 +559,7 @@ async def handle_demo_chat(query: str) -> Dict[str, Any]:
             if res.get("status") == "confirmed":
                 date_display = "tomorrow" if appt_date == (date.today() + timedelta(days=1)).isoformat() else f"on {appt_date}"
                 return {
-                    "reply": f"Your appointment for {patient_name} with {target_doctor} has been confirmed {date_display} at {slot}. Please arrive 10 minutes early at reception with government ID. You can view this booking anytime in the Appointments tab.",
+                    "reply": f"Your appointment for {patient_name} with {target_doctor} has been confirmed {date_display} at {slot}. Please arrive 10 minutes early at reception with ID. You can view this booking anytime in the Appointments tab.",
                     "actions": actions_taken
                 }
             else:
@@ -441,7 +568,7 @@ async def handle_demo_chat(query: str) -> Dict[str, Any]:
                     "actions": actions_taken
                 }
 
-        # Otherwise, query doctors info
+        # Query doctors information / Symptom guidance
         db = await get_db()
         try:
             if matched_doc:
@@ -451,7 +578,6 @@ async def handle_demo_chat(query: str) -> Dict[str, Any]:
                 ) as cur:
                     rows = await cur.fetchall()
             else:
-                # Search by specialization or query
                 async with db.execute(
                     "SELECT * FROM doctors WHERE name LIKE ? OR specialization LIKE ? OR department LIKE ? OR bio LIKE ? ORDER BY rating DESC LIMIT 3",
                     (f"%{query}%", f"%{query}%", f"%{query}%", f"%{query}%")
@@ -474,13 +600,13 @@ async def handle_demo_chat(query: str) -> Dict[str, Any]:
                 }
             else:
                 return {
-                    "reply": "We have 10 top specialist doctors available across Cardiology, Dermatology, Orthopedics, Pediatrics, Neurology, Gynecology, Gastroenterology, Ophthalmology, Psychiatry, and General Medicine. You can browse all doctor profiles in the Doctors tab. Which specialist would you like to consult?",
+                    "reply": f"At {config.COMPANY_NAME}, we have 10 top specialist doctors available across Cardiology, Dermatology, Orthopedics, Pediatrics, Neurology, Gynecology, Gastroenterology, Ophthalmology, Psychiatry, and General Medicine. You can browse all doctor profiles in the Doctors tab. Which specialist would you like to consult?",
                     "actions": actions_taken
                 }
         finally:
             await db.close()
 
-    # 6. Corporate Staff Availability Check
+    # 15. Corporate Staff Availability Check
     if any(w in text for w in ["available", "availability", "free", "slot"]):
         staff = "Rajesh Krishnamurthy"
         for name in ["Dr. Ananya Sharma", "Rajesh Krishnamurthy", "Meera Iyer", "Vikram Desai", "Priya Nair", "Arjun Mehta", "Kavitha Sundaram", "Rohit Agarwal"]:
@@ -503,7 +629,7 @@ async def handle_demo_chat(query: str) -> Dict[str, Any]:
                 "actions": actions_taken
             }
 
-    # 7. Corporate Staff Book appointment
+    # 16. Corporate Staff Book appointment
     if any(w in text for w in ["book", "reserve", "schedule"]):
         staff = "Rajesh Krishnamurthy"
         for name in ["Dr. Ananya Sharma", "Rajesh Krishnamurthy", "Meera Iyer", "Vikram Desai", "Priya Nair", "Arjun Mehta", "Kavitha Sundaram", "Rohit Agarwal"]:
@@ -530,7 +656,7 @@ async def handle_demo_chat(query: str) -> Dict[str, Any]:
             "actions": actions_taken
         }
 
-    # 8. Leave message
+    # 17. Leave message
     if any(w in text for w in ["message", "voicemail", "note"]):
         staff = "Arjun Mehta"
         for name in ["Dr. Ananya Sharma", "Rajesh Krishnamurthy", "Meera Iyer", "Vikram Desai", "Priya Nair", "Arjun Mehta", "Kavitha Sundaram", "Rohit Agarwal"]:
@@ -550,8 +676,8 @@ async def handle_demo_chat(query: str) -> Dict[str, Any]:
             "actions": actions_taken
         }
 
-    # 9. Staff directory lookup
-    if any(w in text for w in ["directory", "who is", "extension", "contact", "ceo", "engineer", "sales"]):
+    # 18. Staff directory lookup
+    if any(w in text for w in ["directory", "who is", "extension", "contact", "ceo", "engineer", "sales", "hr", "finance", "support", "product", "it"]):
         res = await lookup_directory(query=query)
         actions_taken.append({"tool": "lookup_directory", "args": {"query": query}})
         staff_list = res.get("staff", []) if isinstance(res.get("staff"), list) else res.get("directory", [])
@@ -562,9 +688,32 @@ async def handle_demo_chat(query: str) -> Dict[str, Any]:
                 "actions": actions_taken
             }
 
-    # Default fallback
+    # 19. Semantic Database Search Fallback
+    db = await get_db()
+    try:
+        # Check company info
+        async with db.execute("SELECT title, content FROM company_info WHERE title LIKE ? OR content LIKE ?", (f"%{query}%", f"%{query}%")) as cur:
+            ci = await cur.fetchone()
+        if ci:
+            return {
+                "reply": f"{ci['content']}. Is there anything else I can help you with at {config.COMPANY_NAME}?",
+                "actions": [{"tool": "get_company_info", "args": {"query": query}}]
+            }
+
+        # Check staff directory
+        async with db.execute("SELECT name, title, department, status, bio FROM staff_directory WHERE name LIKE ? OR department LIKE ? OR bio LIKE ?", (f"%{query}%", f"%{query}%", f"%{query}%")) as cur:
+            st = await cur.fetchone()
+        if st:
+            return {
+                "reply": f"{st['name']} is our {st['title']} in {st['department']}. Status: {st['status']}. {st['bio']}",
+                "actions": [{"tool": "lookup_directory", "args": {"query": query}}]
+            }
+    finally:
+        await db.close()
+
+    # Intelligent Conversational Fallback
     return {
-        "reply": f"Thank you for reaching out to {config.COMPANY_NAME}. I can help you check doctors availability, book doctor consultations, check corporate staff availability, lookup our directory, find office directions and hours, or record a message. What can I do for you today?",
+        "reply": f"Thank you for contacting {config.COMPANY_NAME}. I am Jack, your front desk concierge. I can help you book appointments with our 10 specialist doctors across all departments, schedule meetings with our corporate team, check office directions and hours, or take a detailed message. How may I best assist you?",
         "actions": []
     }
 
