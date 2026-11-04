@@ -1,22 +1,26 @@
-"""Unit and Integration Tests for AI Receptionist Backend."""
+"""Unit and Integration Tests for AI Receptionist Backend & Healthcare Platform."""
 
 import asyncio
 import unittest
 import os
 import aiosqlite
+from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi.testclient import TestClient
 from datetime import date, timedelta
+from google.genai import types
 
 from app.main import app
 from app.database import init_db, get_db
 from app.tools.receptionist_tools import (
+    search_doctors,
     check_availability,
     book_appointment,
     cancel_appointment,
     leave_message,
     lookup_directory,
     get_company_info,
-    transfer_call
+    transfer_call,
+    TOOL_REGISTRY
 )
 
 class TestReceptionistBackend(unittest.TestCase):
@@ -41,11 +45,11 @@ class TestReceptionistBackend(unittest.TestCase):
         staff = res.json()
         self.assertTrue(len(staff) >= 5)
 
-        # Search query
-        res_search = self.client.get("/api/directory?q=Marcus")
+        # Search query matching seeded staff
+        res_search = self.client.get("/api/directory?q=Rajesh")
         self.assertEqual(res_search.status_code, 200)
         found = res_search.json()
-        self.assertTrue(any("Marcus" in s["name"] for s in found))
+        self.assertTrue(any("Rajesh" in s["name"] for s in found))
 
     def test_03_lookup_directory_tool(self):
         async def run_tool():
@@ -57,7 +61,7 @@ class TestReceptionistBackend(unittest.TestCase):
     def test_04_check_availability_tool(self):
         async def run_tool():
             tomorrow = (date.today() + timedelta(days=1)).isoformat()
-            return await check_availability("Marcus Sterling", tomorrow)
+            return await check_availability("Rajesh Krishnamurthy", tomorrow)
         result = asyncio.run(run_tool())
         self.assertEqual(result["status"], "success")
         self.assertTrue(len(result["available_slots"]) > 0)
@@ -69,7 +73,7 @@ class TestReceptionistBackend(unittest.TestCase):
             book_res = await book_appointment(
                 visitor_name="Alexander Hamilton",
                 contact_info="alex@treasury.gov",
-                staff_or_department="Marcus Sterling",
+                staff_or_department="Rajesh Krishnamurthy",
                 date_str=target_date,
                 time_slot="02:00 PM",
                 purpose="Annual Enterprise Software Contract Review"
@@ -87,7 +91,7 @@ class TestReceptionistBackend(unittest.TestCase):
             return await leave_message(
                 caller_name="Clara Oswald",
                 contact_info="clara@tardis.co.uk",
-                recipient_name="Sarah Jenkins",
+                recipient_name="Priya Nair",
                 message="Please call back regarding cloud infrastructure migration schedule.",
                 urgency="Urgent"
             )
@@ -109,10 +113,123 @@ class TestReceptionistBackend(unittest.TestCase):
 
     def test_08_transfer_call_tool(self):
         async def run_tool():
-            return await transfer_call("Jessica Wong")
+            return await transfer_call("Kavitha Sundaram")
         result = asyncio.run(run_tool())
         self.assertEqual(result["status"], "transfer_initiated")
         self.assertEqual(result["extension"], "601")
+
+    def test_09_search_doctors_tool(self):
+        async def run_doctor_searches():
+            # Search by name
+            res_name = await search_doctors(query="Dr. Arun")
+            # Search by specialization
+            res_spec = await search_doctors(specialization="Dermatology")
+            # Search by symptom
+            res_symptom = await search_doctors(query="chest pain")
+            # Search all
+            res_all = await search_doctors(query="all")
+            return res_name, res_spec, res_symptom, res_all
+
+        res_name, res_spec, res_symptom, res_all = asyncio.run(run_doctor_searches())
+        self.assertEqual(res_name["status"], "success")
+        self.assertTrue(res_name["count"] >= 1)
+        self.assertTrue(any("Arun" in d["name"] for d in res_name["doctors"]))
+
+        self.assertEqual(res_spec["status"], "success")
+        self.assertTrue(res_spec["count"] >= 1)
+        self.assertTrue(any(d["specialization"] == "Dermatology" for d in res_spec["doctors"]))
+
+        self.assertEqual(res_symptom["status"], "success")
+        self.assertTrue(res_symptom["count"] >= 1)
+
+        self.assertEqual(res_all["status"], "success")
+        self.assertEqual(res_all["count"], 10)
+
+    def test_10_doctor_appointment_booking_flow(self):
+        async def run_flow():
+            target_date = (date.today() + timedelta(days=3)).isoformat()
+            # 1. Search for doctor
+            doc_res = await search_doctors(query="Cardiology")
+            doctor_name = doc_res["doctors"][0]["name"]
+
+            # 2. Check doctor availability
+            avail_res = await check_availability(doctor_name, target_date)
+
+            # 3. Book consultation
+            chosen_slot = avail_res["available_slots"][0] if avail_res["available_slots"] else "10:00 AM"
+            book_res = await book_appointment(
+                visitor_name="Vikramaditya Rao",
+                contact_info="+91-98765-11223",
+                staff_or_department=doctor_name,
+                date_str=target_date,
+                time_slot=chosen_slot,
+                purpose="Annual cardiac wellness evaluation"
+            )
+
+            # 4. Cancel to clean up
+            cancel_res = await cancel_appointment("Vikramaditya Rao", target_date)
+            return doc_res, avail_res, book_res, cancel_res
+
+        doc_res, avail_res, book_res, cancel_res = asyncio.run(run_flow())
+        self.assertEqual(doc_res["status"], "success")
+        self.assertEqual(avail_res["status"], "success")
+        self.assertEqual(book_res["status"], "confirmed")
+        self.assertEqual(cancel_res["status"], "cancelled")
+
+    def test_11_doctor_rest_api_endpoints(self):
+        # 1. List doctors
+        res = self.client.get("/api/doctors")
+        self.assertEqual(res.status_code, 200)
+        docs = res.json()
+        self.assertEqual(len(docs), 10)
+
+        # 2. List specializations
+        res_spec = self.client.get("/api/doctors/specializations/list")
+        self.assertEqual(res_spec.status_code, 200)
+        specs = res_spec.json()
+        self.assertIn("Cardiology", specs)
+        self.assertIn("Dermatology", specs)
+
+        # 3. Get single doctor
+        first_id = docs[0]["id"]
+        res_doc = self.client.get(f"/api/doctors/{first_id}")
+        self.assertEqual(res_doc.status_code, 200)
+        self.assertEqual(res_doc.json()["id"], first_id)
+
+    @patch("google.genai.Client")
+    def test_12_text_chat_function_calling_manual_execution(self, mock_client_cls):
+        """Verify proper manual async function calling without AFC crash."""
+        # Setup mock Gemini responses
+        fc = types.FunctionCall(name="search_doctors", args={"query": "Cardiology"})
+        resp1 = MagicMock()
+        resp1.function_calls = [fc]
+        resp1.candidates = [MagicMock(content=types.Content(role="model", parts=[types.Part.from_function_call(name=fc.name, args=fc.args)]))]
+        resp1.text = None
+
+        resp2 = MagicMock()
+        resp2.function_calls = None
+        resp2.text = "I found Dr. Arun Prakash Sharma, our senior cardiologist. Would you like me to book an appointment for you?"
+
+        mock_instance = MagicMock()
+        mock_instance.aio.models.generate_content = AsyncMock(side_effect=[resp1, resp2])
+        mock_client_cls.return_value = mock_instance
+
+        # Call /api/chat with an active API key
+        res = self.client.post("/api/chat", json={
+            "message": "Find a cardiologist",
+            "api_key": "test_gemini_api_key"
+        })
+
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertIn("reply", data)
+        self.assertIn("Dr. Arun Prakash Sharma", data["reply"])
+        self.assertTrue(any(a["tool"] == "search_doctors" for a in data.get("actions", [])))
+
+        # Verify automatic_function_calling was disabled in generate_content config
+        call_kwargs = mock_instance.aio.models.generate_content.call_args_list[0].kwargs
+        cfg = call_kwargs["config"]
+        self.assertTrue(cfg.automatic_function_calling.disable)
 
 if __name__ == "__main__":
     unittest.main()

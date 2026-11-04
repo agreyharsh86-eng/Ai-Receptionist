@@ -8,6 +8,7 @@ import asyncio
 import base64
 import json
 import logging
+import inspect
 from datetime import datetime, date
 from typing import Optional, Callable, Dict, Any, List
 from google import genai
@@ -246,7 +247,15 @@ class LiveSessionManager:
 
         if tool_name in TOOL_REGISTRY:
             try:
-                result = await TOOL_REGISTRY[tool_name](**tool_args)
+                tool_fn = TOOL_REGISTRY[tool_name]
+                if inspect.iscoroutinefunction(tool_fn):
+                    result = await tool_fn(**tool_args)
+                elif callable(tool_fn):
+                    res = tool_fn(**tool_args)
+                    if inspect.iscoroutine(res):
+                        result = await res
+                    else:
+                        result = res
             except Exception as ex:
                 logger.error(
                     f"Tool execution failed for {tool_name}: {ex}",

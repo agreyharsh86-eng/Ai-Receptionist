@@ -26,18 +26,92 @@ async def search_doctors(query: str = "", specialization: str = "") -> Dict[str,
     """
     db = await get_db()
     try:
+        clean_q = (query or "").strip()
+        clean_spec = (specialization or "").strip()
+
+        # If user asks for general listing, treat as unconstrained search
+        if clean_q.lower() in ("all", "any", "doctor", "doctors", "specialist", "specialists", "list"):
+            clean_q = ""
+
+        # Common symptom-to-specialization mapping for intelligent fallback
+        symptom_spec_map = {
+            "chest pain": "Cardiology",
+            "heart": "Cardiology",
+            "cardio": "Cardiology",
+            "blood pressure": "Cardiology",
+            "bp": "Cardiology",
+            "cholesterol": "Cardiology",
+            "skin": "Dermatology",
+            "acne": "Dermatology",
+            "rash": "Dermatology",
+            "pimples": "Dermatology",
+            "hair fall": "Dermatology",
+            "hair loss": "Dermatology",
+            "bone": "Orthopedics",
+            "joint": "Orthopedics",
+            "knee": "Orthopedics",
+            "back pain": "Orthopedics",
+            "fracture": "Orthopedics",
+            "child": "Pediatrics",
+            "children": "Pediatrics",
+            "baby": "Pediatrics",
+            "infant": "Pediatrics",
+            "vaccination": "Pediatrics",
+            "brain": "Neurology",
+            "headache": "Neurology",
+            "migraine": "Neurology",
+            "seizure": "Neurology",
+            "pregnancy": "Gynecology",
+            "pregnant": "Gynecology",
+            "period": "Gynecology",
+            "periods": "Gynecology",
+            "women": "Gynecology",
+            "stomach": "Gastroenterology",
+            "liver": "Gastroenterology",
+            "acidity": "Gastroenterology",
+            "digestion": "Gastroenterology",
+            "eye": "Ophthalmology",
+            "eyes": "Ophthalmology",
+            "vision": "Ophthalmology",
+            "cataract": "Ophthalmology",
+            "lasik": "Ophthalmology",
+            "depression": "Psychiatry",
+            "anxiety": "Psychiatry",
+            "stress": "Psychiatry",
+            "mental": "Psychiatry",
+            "fever": "General Medicine",
+            "cold": "General Medicine",
+            "cough": "General Medicine",
+            "diabetes": "General Medicine",
+            "general": "General Medicine"
+        }
+
         sql = "SELECT * FROM doctors WHERE 1=1"
         params = []
-        if query:
+        if clean_q:
             sql += " AND (name LIKE ? OR specialization LIKE ? OR department LIKE ? OR bio LIKE ?)"
-            params.extend([f"%{query}%", f"%{query}%", f"%{query}%", f"%{query}%"])
-        if specialization:
+            params.extend([f"%{clean_q}%", f"%{clean_q}%", f"%{clean_q}%", f"%{clean_q}%"])
+        if clean_spec:
             sql += " AND specialization LIKE ?"
-            params.append(f"%{specialization}%")
+            params.append(f"%{clean_spec}%")
         sql += " ORDER BY rating DESC"
 
         async with db.execute(sql, params) as cursor:
             rows = await cursor.fetchall()
+
+        # If no direct match on query, check if query matched a known symptom
+        if not rows and clean_q:
+            mapped_spec = None
+            q_lower = clean_q.lower()
+            for symptom, spec in symptom_spec_map.items():
+                if symptom in q_lower:
+                    mapped_spec = spec
+                    break
+
+            if mapped_spec:
+                fallback_sql = "SELECT * FROM doctors WHERE specialization LIKE ? ORDER BY rating DESC"
+                async with db.execute(fallback_sql, [f"%{mapped_spec}%"]) as fallback_cur:
+                    rows = await fallback_cur.fetchall()
 
         doctors = []
         for r in rows:

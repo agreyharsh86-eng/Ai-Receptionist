@@ -1,3 +1,5 @@
+import inspect
+import logging
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
@@ -14,9 +16,11 @@ from app.tools.receptionist_tools import (
     lookup_directory,
     get_company_info,
     transfer_call,
-    TOOL_REGISTRY
+    TOOL_REGISTRY,
+    RECEPTIONIST_TOOL_FUNCTIONS
 )
 
+logger = logging.getLogger("api_routes")
 router = APIRouter(prefix="/api")
 
 # Models
@@ -732,76 +736,110 @@ async def text_chat_endpoint(chat_req: TextChatRequest):
         client = genai.Client(api_key=active_key)
         
         # Build prompt with reception context
-        prompt_instruction = f"""You are {config.RECEPTIONIST_NAME}, the AI Executive Receptionist for {config.COMPANY_NAME}.
-You represent a premier corporate front desk and medical consultation centre.
-You are professional, articulate, warm, and highly efficient.
+        prompt_instruction = f"""You are {config.RECEPTIONIST_NAME}, the AI Executive Healthcare & Hospital Receptionist for {config.COMPANY_NAME}.
+You represent a premier medical centre and hospital consultation clinic.
+You are professional, articulate, empathetic, and highly efficient.
 Today's date is {date.today().isoformat()}.
 
 Your duties:
-1. Greet guests and callers warmly.
-2. Answer inquiries about the company, address ({config.COMPANY_LOCATION}), office hours ({config.COMPANY_HOURS}), visitor badges, and Wi-Fi using `get_company_info`.
-3. Check doctor and staff availability using `check_availability` and book appointments using `book_appointment`.
-4. Search for doctors, medical specialists, and departments using `search_doctors`.
-5. If a requested staff member is unavailable, in a meeting, or out of office, offer to take a detailed message with `leave_message`.
-6. Look up team members or departments using `lookup_directory`.
+1. Greet patients, callers, and visitors warmly and respectfully.
+2. Answer inquiries about the facility, address ({config.COMPANY_LOCATION}), operating hours ({config.COMPANY_HOURS}), visitor badges, and parking using `get_company_info`.
+3. Search for doctors, medical specialists, and departments using `search_doctors`.
+4. Check doctor and staff availability using `check_availability` and book appointments using `book_appointment`.
+5. If a requested doctor or staff member is unavailable, offer to check alternative slots or take a detailed message with `leave_message`.
+6. Look up hospital team members or departments using `lookup_directory`.
 7. Transfer callers when appropriate using `transfer_call`.
 
-Keep your answers conversational, concise, and polite as a front-desk professional would speak. Avoid lengthy monologues. Mention that callers can view all appointments and available doctors in the Appointments and Doctors tabs on the dashboard.
+Keep your answers conversational, concise, and helpful as a hospital front-desk professional would speak. Avoid lengthy monologues. Mention that callers can view all booked appointments and doctor schedules directly in the Appointments and Doctors tabs on the dashboard.
 """
 
-        # We can call the model with tools enabled
-        response = client.models.generate_content(
-            model=config.GEMINI_FALLBACK_MODEL,
-            contents=chat_req.message,
-            config=types.GenerateContentConfig(
-                system_instruction=prompt_instruction,
-                tools=[
-                    search_doctors,
-                    check_availability,
-                    book_appointment,
-                    cancel_appointment,
-                    leave_message,
-                    lookup_directory,
-                    get_company_info,
-                    transfer_call
-                ]
-            )
+        # Build contents list supporting conversation history
+        contents: List[types.Content] = []
+        if chat_req.history:
+            for h in chat_req.history:
+                role = "user" if h.get("role") in ("user", "human") else "model"
+                text = h.get("text") or h.get("content") or ""
+                if text:
+                    contents.append(types.Content(role=role, parts=[types.Part.from_text(text=text)]))
+        contents.append(types.Content(role="user", parts=[types.Part.from_text(text=chat_req.message)]))
+
+        # Explicitly disable SDK automatic function calling to allow manual async await execution
+        gen_config = types.GenerateContentConfig(
+            system_instruction=prompt_instruction,
+            tools=RECEPTIONIST_TOOL_FUNCTIONS,
+            automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
         )
 
         actions_taken = []
         reply_text = ""
+        max_tool_turns = 5
 
-        # Handle function calls if any
-        if response.function_calls:
+        for _ in range(max_tool_turns):
+            response = await client.aio.models.generate_content(
+                model=config.GEMINI_FALLBACK_MODEL,
+                contents=contents,
+                config=gen_config,
+            )
+
+            # If no function calls requested by model, we have the final textual response
+            if not response.function_calls:
+                reply_text = response.text or ""
+                break
+
+            # Append the model turn containing function calls to conversation history
+            if response.candidates and response.candidates[0].content:
+                contents.append(response.candidates[0].content)
+            else:
+                fc_parts = [
+                    types.Part.from_function_call(name=fc.name, args=dict(fc.args) if fc.args else {})
+                    for fc in response.function_calls
+                ]
+                contents.append(types.Content(role="model", parts=fc_parts))
+
+            # Execute all tool calls asynchronously and gather responses
+            tool_response_parts = []
             for fc in response.function_calls:
                 fn_name = fc.name
-                fn_args = fc.args
+                fn_args = dict(fc.args) if fc.args else {}
                 actions_taken.append({"tool": fn_name, "args": fn_args})
-                
-                # Execute tool
+
+                tool_result = {"error": f"Tool '{fn_name}' not recognized"}
                 if fn_name in TOOL_REGISTRY:
                     tool_fn = TOOL_REGISTRY[fn_name]
-                    tool_result = await tool_fn(**(fn_args or {}))
-                    
-                    # Generate follow-up answer
-                    follow_up = client.models.generate_content(
-                        model=config.GEMINI_FALLBACK_MODEL,
-                        contents=[
-                            types.Content(role="user", parts=[types.Part.from_text(text=chat_req.message)]),
-                            types.Content(role="model", parts=[types.Part.from_function_call(name=fn_name, args=fn_args or {})]),
-                            types.Content(role="user", parts=[types.Part.from_function_response(name=fn_name, response={"result": tool_result})])
-                        ],
-                        config=types.GenerateContentConfig(
-                            system_instruction=prompt_instruction
-                        )
+                    try:
+                        if inspect.iscoroutinefunction(tool_fn):
+                            tool_result = await tool_fn(**fn_args)
+                        elif callable(tool_fn):
+                            res = tool_fn(**fn_args)
+                            if inspect.iscoroutine(res):
+                                tool_result = await res
+                            else:
+                                tool_result = res
+                    except Exception as ex:
+                        logger.error(f"Manual tool execution failed for {fn_name}: {ex}", exc_info=True)
+                        tool_result = {"error": str(ex)}
+
+                tool_response_parts.append(
+                    types.Part.from_function_response(
+                        name=fn_name,
+                        response={"result": tool_result}
                     )
-                    reply_text = follow_up.text or ""
-        else:
-            reply_text = response.text or ""
+                )
+
+            # Feed tool results back to AI assistant
+            contents.append(types.Content(role="tool", parts=tool_response_parts))
+
+        if not reply_text and response and response.text:
+            reply_text = response.text
 
         return {
-            "reply": reply_text,
+            "reply": reply_text or "Your request has been processed successfully.",
             "actions": actions_taken
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Gemini API chat error: {e}", exc_info=True)
+        # Graceful fallback to demo chat handler if network/key issues occur
+        try:
+            return await handle_demo_chat(chat_req.message)
+        except Exception:
+            raise HTTPException(status_code=500, detail=str(e))
