@@ -140,17 +140,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const x = i * (barWidth + gap);
             const y = (height - barHeight) / 2;
 
-            // Gradient fill - Clinical Medical Blue & Green
+            // Gradient fill
             const grad = canvasCtx.createLinearGradient(x, y, x, y + barHeight);
             if ((state.audioPlayer && state.audioPlayer.isPlaying) || state.isJackSpeaking) {
-                grad.addColorStop(0, '#2563EB');
-                grad.addColorStop(1, '#3B82F6');
+                grad.addColorStop(0, '#00f0ff');
+                grad.addColorStop(1, '#6366f1');
             } else if (state.currentVolume > 0.05) {
-                grad.addColorStop(0, '#10B981');
-                grad.addColorStop(1, '#059669');
+                grad.addColorStop(0, '#38bdf8');
+                grad.addColorStop(1, '#0284c7');
             } else {
-                grad.addColorStop(0, '#E2E8F0');
-                grad.addColorStop(1, '#CBD5E1');
+                grad.addColorStop(0, 'rgba(255, 255, 255, 0.2)');
+                grad.addColorStop(1, 'rgba(255, 255, 255, 0.05)');
             }
 
             canvasCtx.fillStyle = grad;
@@ -702,27 +702,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch('/api/appointments');
             const appts = await res.json();
 
-            const confirmedCount = appts.filter(a => a.status === 'Confirmed').length;
-            apptCountBadge.textContent = confirmedCount;
-
-            // Update KPI metric card if present
-            const kpiAppts = document.getElementById('kpiTotalAppts');
-            if (kpiAppts) kpiAppts.textContent = confirmedCount;
-
-            const kpiRate = document.getElementById('kpiConfirmationRate');
-            if (kpiRate && appts.length > 0) {
-                kpiRate.textContent = `${Math.round((confirmedCount / appts.length) * 100)}%`;
-            }
+            apptCountBadge.textContent = appts.filter(a => a.status === 'Confirmed').length;
 
             if (appts.length === 0) {
-                const emptyNotice = '<div class="system-notice">No upcoming appointments scheduled.</div>';
-                appointmentsList.innerHTML = emptyNotice;
-                const appointmentsListTab = document.getElementById('appointmentsListTab');
-                if (appointmentsListTab) appointmentsListTab.innerHTML = emptyNotice;
+                appointmentsList.innerHTML = '<div class="system-notice">No upcoming appointments scheduled.</div>';
                 return;
             }
 
-            const apptsHtml = appts.map(a => {
+            appointmentsList.innerHTML = appts.map(a => {
                 const isDoctor = a.staff_name.startsWith('Dr.') || a.department.includes('Centre') || a.department.includes('Clinic');
                 const roleIcon = isDoctor ? '🩺' : '💼';
                 const label = isDoctor ? 'Consultation with' : 'Meeting with';
@@ -747,26 +734,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             `;
             }).join('');
-
-            appointmentsList.innerHTML = apptsHtml;
-            const appointmentsListTab = document.getElementById('appointmentsListTab');
-            if (appointmentsListTab) appointmentsListTab.innerHTML = apptsHtml;
         } catch (e) {
             appointmentsList.innerHTML = '<div class="system-notice">Failed to load appointments.</div>';
         }
     }
-    window.loadAppointments = loadAppointments;
 
     async function loadMessages() {
         try {
             const res = await fetch('/api/messages');
             const msgs = await res.json();
 
-            const unreadCount = msgs.filter(m => !m.is_read).length;
-            msgCountBadge.textContent = unreadCount;
-
-            const kpiMsgs = document.getElementById('kpiTotalMessages');
-            if (kpiMsgs) kpiMsgs.textContent = unreadCount;
+            msgCountBadge.textContent = msgs.filter(m => !m.is_read).length;
 
             if (msgs.length === 0) {
                 messagesList.innerHTML = '<div class="system-notice">Inbox is empty. No visitor messages.</div>';
@@ -882,11 +860,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch(url);
             const doctors = await res.json();
 
-            const availDocs = doctors.filter(d => d.status === 'Available').length;
-            doctorCountBadge.textContent = availDocs;
-
-            const kpiDocs = document.getElementById('kpiTotalDoctors');
-            if (kpiDocs) kpiDocs.textContent = `${availDocs} Available`;
+            doctorCountBadge.textContent = doctors.filter(d => d.status === 'Available').length;
 
             if (doctors.length === 0) {
                 doctorsList.innerHTML = '<div class="system-notice">No doctors found matching your criteria.</div>';
@@ -1266,14 +1240,9 @@ document.addEventListener('DOMContentLoaded', () => {
             tabPanes.forEach(p => p.classList.remove('active'));
 
             btn.classList.add('active');
-            const targetPane = document.getElementById(target);
-            if (targetPane) targetPane.classList.add('active');
+            document.getElementById(target).classList.add('active');
 
-            if (target === 'overviewTab') {
-                loadAppointments();
-                loadDoctors();
-                loadMessages();
-            } else if (target === 'appointmentsTab') loadAppointments();
+            if (target === 'appointmentsTab') loadAppointments();
             else if (target === 'doctorsTab') loadDoctors();
             else if (target === 'messagesTab') loadMessages();
             else if (target === 'directoryTab') loadDirectory();
@@ -1281,22 +1250,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Header "+ Schedule Appointment" button
-    const headerNewApptBtn = document.getElementById('headerNewApptBtn');
-    if (headerNewApptBtn) {
-        headerNewApptBtn.addEventListener('click', async () => {
-            const doctors = await getDoctorsCache();
-            if (doctors.length > 0) {
-                window.openDoctorBooking(doctors[0].id);
-            } else {
-                showToast('Opening appointment scheduler...', 'info');
-            }
-        });
-    }
-
     // Refresh Buttons
     document.getElementById('refreshApptsBtn')?.addEventListener('click', loadAppointments);
-    document.getElementById('refreshApptsBtn2')?.addEventListener('click', loadAppointments);
     document.getElementById('refreshMsgsBtn')?.addEventListener('click', loadMessages);
     document.getElementById('refreshLogsBtn')?.addEventListener('click', loadCallLogs);
     document.getElementById('refreshDoctorsBtn')?.addEventListener('click', () => loadDoctors());
