@@ -264,7 +264,7 @@ async def get_doctor(doctor_id: int):
 @router.get("/config")
 async def get_config():
     return {
-        "has_api_key": bool(config.GEMINI_API_KEY),
+        "has_api_key": config.has_valid_api_key(),
         "receptionist_name": config.RECEPTIONIST_NAME,
         "company_name": config.COMPANY_NAME,
         "live_model": config.GEMINI_LIVE_MODEL,
@@ -280,150 +280,450 @@ async def set_api_key(data: ApiKeyUpdate):
     config.GEMINI_API_KEY = data.api_key.strip()
     return {"status": "success", "message": "API key updated successfully"}
 
-async def handle_demo_chat(query: str) -> Dict[str, Any]:
-    text = query.strip().lower()
+async def handle_conversational_chat(query: str, history: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
+    """Conversational AI Reasoning Engine for Healthcare Front-Desk Concierge.
+    
+    Provides natural multi-turn dialogue, symptom matching, doctor directory search,
+    live calendar slot inspection, missing-info collection, explicit confirmation checks,
+    and actual database booking execution.
+    """
+    raw_query = query.strip()
+    text = raw_query.lower()
     actions_taken = []
+    hist = history or []
 
-    # 1. Identity & Persona ("Who are you", "What is your name", "Who is Jack")
-    if any(p in text for p in ["who are you", "what is your name", "what's your name", "who is jack", "tell me about yourself", "your name", "introduce yourself"]):
+    # Specialist Doctor Directory definition
+    doctor_catalog = [
+        {
+            "name": "Dr. Arun Prakash Sharma",
+            "specialization": "Cardiology",
+            "department": "Heart & Vascular Centre",
+            "keywords": ["arun", "sharma", "cardiology", "cardiologist", "heart", "chest pain", "bp", "blood pressure", "cholesterol", "cardio", "angina"]
+        },
+        {
+            "name": "Dr. Priyanka Venkatesh",
+            "specialization": "Dermatology",
+            "department": "Skin & Aesthetic Clinic",
+            "keywords": ["priyanka", "venkatesh", "dermatology", "dermatologist", "skin", "acne", "rash", "pimples", "hair fall", "hair loss", "eczema", "allergy"]
+        },
+        {
+            "name": "Dr. Rajiv Malhotra",
+            "specialization": "Orthopedics",
+            "department": "Bone & Joint Institute",
+            "keywords": ["rajiv", "malhotra", "orthopedics", "orthopedic", "bone", "joint", "knee", "knee pain", "back pain", "fracture", "spine", "arthritis"]
+        },
+        {
+            "name": "Dr. Kavitha Raghunathan",
+            "specialization": "Pediatrics",
+            "department": "Children's Health Centre",
+            "keywords": ["kavitha", "raghunathan", "pediatrics", "pediatrician", "pediatric", "child", "children", "baby", "infant", "vaccination", "kids"]
+        },
+        {
+            "name": "Dr. Siddharth Joshi",
+            "specialization": "Neurology",
+            "department": "Brain & Neuroscience Institute",
+            "keywords": ["siddharth", "joshi", "neurology", "neurologist", "brain", "headache", "migraine", "seizure", "paralysis", "nerve", "neurological"]
+        },
+        {
+            "name": "Dr. Meenakshi Sundaram",
+            "specialization": "Gynecology & Obstetrics",
+            "department": "Women's Health Centre",
+            "keywords": ["meenakshi", "sundaram", "gynecology", "gynecologist", "obstetrics", "women", "pregnancy", "pregnant", "period", "periods", "maternity"]
+        },
+        {
+            "name": "Dr. Harsh Vardhan Patel",
+            "specialization": "Gastroenterology",
+            "department": "Digestive Health Centre",
+            "keywords": ["harsh", "patel", "gastroenterology", "gastroenterologist", "gastro", "stomach", "liver", "acidity", "indigestion", "gas", "digestive", "gut"]
+        },
+        {
+            "name": "Dr. Anjali Krishnamurthy",
+            "specialization": "Ophthalmology",
+            "department": "Vision & Eye Care Centre",
+            "keywords": ["anjali", "krishnamurthy", "ophthalmology", "ophthalmologist", "eye", "eyes", "vision", "glasses", "cataract", "lasik", "sight"]
+        },
+        {
+            "name": "Dr. Nikhil Banerjee",
+            "specialization": "Psychiatry",
+            "department": "Mental Health & Wellness Centre",
+            "keywords": ["nikhil", "banerjee", "psychiatry", "psychiatrist", "mental", "wellness", "therapy", "depression", "anxiety", "stress", "sleep", "counseling"]
+        },
+        {
+            "name": "Dr. Lakshmi Narayanan Iyer",
+            "specialization": "General Medicine",
+            "department": "Internal Medicine & Diagnostics",
+            "keywords": ["lakshmi", "iyer", "general medicine", "general physician", "physician", "fever", "checkup", "cold", "cough", "diabetes", "sugar", "sick", "weakness", "pain", "flu"]
+        }
+    ]
+
+    # Combine context across history
+    combined_user_text = ""
+    last_model_message = ""
+    for h in hist:
+        role = h.get("role", "")
+        content = h.get("text") or h.get("content") or ""
+        if role in ("user", "human"):
+            combined_user_text += " " + content.lower()
+        elif role in ("model", "assistant"):
+            last_model_message = content
+
+    combined_user_text += " " + text
+
+    # Check if the previous model message was an explicit confirmation prompt
+    is_confirm_prompt = False
+    if last_model_message:
+        lmm_lower = last_model_message.lower()
+        if any(p in lmm_lower for p in [
+            "would you like me to confirm", "confirm this booking", "shall i confirm",
+            "shall i go ahead and book", "confirm and finalize", "should i proceed with booking",
+            "would you like me to book this", "shall i finalize"
+        ]):
+            is_confirm_prompt = True
+
+    # -------------------------------------------------------------------------
+    # Entity Extraction (Doctor, Date, Slot, Name, Contact, Purpose)
+    # -------------------------------------------------------------------------
+
+    # 1. Doctor Detection
+    detected_doctor = None
+    # Check if last model message proposed a doctor
+    if last_model_message:
+        for doc in doctor_catalog:
+            if doc["name"].lower() in last_model_message.lower():
+                detected_doctor = doc
+                break
+
+    # If user mentioned a new doctor or specialty in current turn, prioritize that
+    for doc in doctor_catalog:
+        if doc["name"].lower() in text:
+            detected_doctor = doc
+            break
+        for kw in doc["keywords"]:
+            if re.search(r'\b' + re.escape(kw) + r'\b', text):
+                detected_doctor = doc
+                break
+        if detected_doctor:
+            break
+
+    # Otherwise check combined user text
+    if not detected_doctor:
+        for doc in doctor_catalog:
+            if doc["name"].lower() in combined_user_text:
+                detected_doctor = doc
+                break
+            for kw in doc["keywords"]:
+                if re.search(r'\b' + re.escape(kw) + r'\b', combined_user_text):
+                    detected_doctor = doc
+                    break
+            if detected_doctor:
+                break
+
+    # 2. Date Detection
+    detected_date = None
+    if "tomorrow" in text:
+        detected_date = (date.today() + timedelta(days=1)).isoformat()
+    elif "today" in text:
+        detected_date = date.today().isoformat()
+    elif "day after tomorrow" in text:
+        detected_date = (date.today() + timedelta(days=2)).isoformat()
+    else:
+        # Check for explicit ISO date (YYYY-MM-DD)
+        date_match = re.search(r'\b(202\d-\d{2}-\d{2})\b', text)
+        if date_match:
+            detected_date = date_match.group(1)
+        elif "tomorrow" in combined_user_text:
+            detected_date = (date.today() + timedelta(days=1)).isoformat()
+        elif "today" in combined_user_text:
+            detected_date = date.today().isoformat()
+        else:
+            date_match_hist = re.search(r'\b(202\d-\d{2}-\d{2})\b', combined_user_text + " " + last_model_message)
+            if date_match_hist:
+                detected_date = date_match_hist.group(1)
+            else:
+                detected_date = (date.today() + timedelta(days=1)).isoformat()
+
+    # 3. Time Slot Detection
+    standard_slots = [
+        "08:30 AM", "09:00 AM", "09:30 AM", "10:00 AM", "10:30 AM",
+        "11:00 AM", "11:30 AM", "01:00 PM", "01:30 PM", "02:00 PM",
+        "02:30 PM", "03:00 PM", "03:30 PM", "04:00 PM", "04:30 PM", "05:00 PM"
+    ]
+    detected_slot = None
+    for s in standard_slots:
+        if s.lower() in text:
+            detected_slot = s
+            break
+
+    if not detected_slot:
+        t_match = re.search(r'\b(0?[1-9]|1[0-2])(?::([0-5][0-9]))?\s*(am|pm)\b', text)
+        if t_match:
+            hr = int(t_match.group(1))
+            mn = t_match.group(2) or "00"
+            period = t_match.group(3).upper()
+            detected_slot = f"{hr:02d}:{mn} {period}"
+
+    if not detected_slot:
+        for s in standard_slots:
+            if s.lower() in combined_user_text:
+                detected_slot = s
+                break
+
+    if not detected_slot and last_model_message:
+        for s in standard_slots:
+            if s.lower() in last_model_message.lower():
+                detected_slot = s
+                break
+
+    # 4. Patient Name Detection
+    detected_name = None
+    name_patterns = [
+        r"(?:my name is|i am|patient name is|name is|this is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)",
+        r"(?:my name is|i am|patient name is|name is|this is)\s+([A-Za-z]+(?:\s+[A-Za-z]+)*)",
+        r"(?:for patient|for)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)",
+        r"(?:for patient|for)\s+([A-Za-z]+(?:\s+[A-Za-z]+)*)",
+    ]
+    for pat in name_patterns:
+        m = re.search(pat, raw_query, re.IGNORECASE)
+        if m:
+            cand = m.group(1).strip()
+            if cand.lower() not in [
+                "an appointment", "appointment", "doctor", "consultation", "cardiologist",
+                "dermatologist", "today", "tomorrow", "me", "him", "her", "cardiology", "general"
+            ]:
+                detected_name = cand.title()
+                break
+
+    if not detected_name:
+        for h in reversed(hist):
+            if h.get("role") in ("user", "human"):
+                u_text = h.get("text") or h.get("content") or ""
+                for pat in name_patterns:
+                    m = re.search(pat, u_text, re.IGNORECASE)
+                    if m:
+                        cand = m.group(1).strip()
+                        if cand.lower() not in [
+                            "an appointment", "appointment", "doctor", "consultation",
+                            "tomorrow", "today", "me", "him", "her"
+                        ]:
+                            detected_name = cand.title()
+                            break
+                if detected_name:
+                    break
+
+    # If last model message explicitly asked for patient name and user provided "FirstName LastName"
+    if not detected_name and last_model_message and ("name" in last_model_message.lower()):
+        parts = raw_query.split(",")
+        first_part = parts[0].strip()
+        words = first_part.split()
+        if 1 <= len(words) <= 3 and all(w.replace("-", "").isalpha() for w in words):
+            if words[0].lower() not in ["yes", "no", "sure", "ok", "okay", "cancel", "tomorrow", "today", "book", "hi", "hello"]:
+                detected_name = first_part.title()
+
+    # 5. Patient Contact Detection (Phone or Email)
+    detected_contact = None
+    phone_match = re.search(r'(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}|\b\d{10}\b|\b\d{5}[-.\s]?\d{5}\b', raw_query)
+    if phone_match:
+        detected_contact = phone_match.group(0).strip()
+    if not detected_contact:
+        email_match = re.search(r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+', raw_query)
+        if email_match:
+            detected_contact = email_match.group(0).strip()
+    if not detected_contact:
+        for h in reversed(hist):
+            if h.get("role") in ("user", "human"):
+                u_text = h.get("text") or h.get("content") or ""
+                p_m = re.search(r'(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}|\b\d{10}\b|\b\d{5}[-.\s]?\d{5}\b', u_text)
+                if p_m:
+                    detected_contact = p_m.group(0).strip()
+                    break
+                e_m = re.search(r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+', u_text)
+                if e_m:
+                    detected_contact = e_m.group(0).strip()
+                    break
+
+    # -------------------------------------------------------------------------
+    # Confirmation Flow Handling (Step 8 & 9 of Core Protocol)
+    # -------------------------------------------------------------------------
+    is_affirmative = any(re.search(r'\b' + re.escape(w) + r'\b', text) for w in [
+        "yes", "yeah", "yep", "sure", "confirm", "proceed", "go ahead", "book it",
+        "please do", "ok", "okay", "correct", "sounds good", "do it", "finalize"
+    ])
+    is_negative = any(re.search(r'\b' + re.escape(w) + r'\b', text) for w in [
+        "no", "cancel", "wait", "stop", "don't", "not", "change", "rebook"
+    ])
+
+    if is_confirm_prompt and is_affirmative and not is_negative:
+        # Patient explicitly confirmed booking!
+        target_doc = detected_doctor["name"] if detected_doctor else "Dr. Arun Prakash Sharma"
+        spec = detected_doctor["specialization"] if detected_doctor else "Specialist Consultation"
+        pat_name = detected_name or "Guest Patient"
+        pat_contact = detected_contact or "+91-98765-43210"
+        appt_date = detected_date or (date.today() + timedelta(days=1)).isoformat()
+        slot = detected_slot or "10:00 AM"
+
+        # Execute booking through verified database tool
+        res = await book_appointment(
+            visitor_name=pat_name,
+            contact_info=pat_contact,
+            staff_or_department=target_doc,
+            date_str=appt_date,
+            time_slot=slot,
+            purpose=f"Medical consultation ({spec})"
+        )
+        actions_taken.append({
+            "tool": "book_appointment",
+            "args": {
+                "visitor_name": pat_name,
+                "contact_info": pat_contact,
+                "staff_or_department": target_doc,
+                "date": appt_date,
+                "time_slot": slot
+            }
+        })
+
+        if res.get("status") == "confirmed":
+            b_id = res.get("booking_id")
+            display_date = "tomorrow" if appt_date == (date.today() + timedelta(days=1)).isoformat() else f"on {appt_date}"
+            return {
+                "reply": f"Your appointment has been successfully booked and confirmed! Your Booking ID is #{b_id}. You are scheduled with {target_doc} {display_date} at {slot} for {pat_name}. A confirmed appointment record has been saved to the hospital registry. Please arrive 10 minutes early at our front desk with a photo ID.",
+                "actions": actions_taken
+            }
+        else:
+            return {
+                "reply": f"I apologize, but {res.get('message', 'that time slot is no longer available')}. Would you like me to check other available slots for {target_doc}?",
+                "actions": actions_taken
+            }
+
+    elif is_confirm_prompt and is_negative:
         return {
-            "reply": f"Hello! My name is {config.RECEPTIONIST_NAME}, the AI Front Desk Concierge and Executive Receptionist for {config.COMPANY_NAME}. I am here to assist you with booking doctor consultations, checking executive staff schedules, guiding you around our corporate offices, answering company inquiries, or logging messages. How may I assist you today?",
+            "reply": "Understood, I have cancelled the pending booking request. Would you like to select a different doctor, change the date, or pick another time slot?",
             "actions": []
         }
 
-    # 2. Capabilities & Help ("What can you do", "Help me", "How does this work")
-    if any(p in text for p in ["what can you do", "help me", "how do you work", "how does this work", "what are your features", "what can i do", "what are my options"]):
-        return {
-            "reply": f"At {config.COMPANY_NAME}, I can help you with: 1) Searching and booking consultations with our 10 specialist doctors across Cardiology, Dermatology, Orthopedics, Pediatrics, Neurology, and more. 2) Checking staff availability and scheduling business meetings with our leadership team. 3) Providing office hours, guest Wi-Fi, visitor parking validation, and directions. 4) Leaving urgent messages and voicemails. How can I help you right now?",
-            "actions": []
-        }
-
-    # 3. About Company ("What is HR Enterprises", "About the company", "What do you do", "Services")
-    if any(p in text for p in ["what is hr enterprises", "about hr enterprises", "about the company", "what company is this", "tell me about hr enterprises", "what do you do", "what services", "what products", "company info"]):
-        return {
-            "reply": f"{config.COMPANY_NAME} provides enterprise cloud infrastructure, AI orchestration platforms, and high-performance business solutions for global organizations, alongside our dedicated Healthcare & Medical Consultation Centre featuring 10 top specialist doctors. Our corporate headquarters is located at {config.COMPANY_LOCATION}. How can I assist you further?",
-            "actions": [{"tool": "get_company_info", "args": {"topic": "about"}}]
-        }
-
-    # 4. CEO & Executive Leadership Inquiries
-    if any(p in text for p in ["who is the ceo", "who is the boss", "founder", "head of company", "president", "ananya sharma"]):
-        return {
-            "reply": f"Dr. Ananya Sharma is the Chief Executive Officer of {config.COMPANY_NAME}. She oversees strategic direction, investor relations, and enterprise partnerships. Would you like me to check her availability or leave a message for her office?",
-            "actions": [{"tool": "lookup_directory", "args": {"query": "Ananya Sharma"}}]
-        }
-
-    # 5. Pleasantries & Conversational Etiquette
-    if any(p in text for p in ["how are you", "how are you doing", "how's it going", "how do you do"]):
-        return {
-            "reply": f"I'm doing wonderful, thank you for asking! I'm ready to assist you with any questions, appointments, or medical consultations at {config.COMPANY_NAME}. What can I do for you?",
-            "actions": []
-        }
-
-    if any(p in text for p in ["thank you", "thanks", "appreciate it", "thank u", "many thanks", "thanks a lot"]):
-        return {
-            "reply": f"You're very welcome! It's always my pleasure to assist you at {config.COMPANY_NAME}. Please let me know if there is anything else I can do for you.",
-            "actions": []
-        }
-
-    if any(p in text for p in ["bye", "goodbye", "see you", "have a good day", "have a nice day", "good night", "take care"]):
-        return {
-            "reply": f"Thank you for contacting {config.COMPANY_NAME}. Have a wonderful day ahead, and please reach out anytime you need assistance!",
-            "actions": []
-        }
-
-    if any(p in text for p in ["are you human", "are you an ai", "are you a bot", "are you real"]):
-        return {
-            "reply": f"I am {config.RECEPTIONIST_NAME}, an AI-powered conversational receptionist built for {config.COMPANY_NAME}. I understand voice commands, schedule appointments, and coordinate front-desk logistics in real time.",
-            "actions": []
-        }
-
-    # 6. Basic Greetings (word boundaries)
-    is_greeting = any(re.search(r'\b' + re.escape(w) + r'\b', text) for w in ["hello", "hi", "hey", "good morning", "good afternoon", "greetings"])
-    has_specific_intent = any(w in text for w in ["doctor", "dr.", "dr ", "specialist", "appointment", "book", "available", "schedule", "hours", "parking", "where", "location", "wifi", "message", "directory", "fee", "pain", "fever", "sick"])
-    if is_greeting and (len(text.split()) <= 3 or not has_specific_intent):
-        return {
-            "reply": f"Good day! Welcome to {config.COMPANY_NAME}. My name is {config.RECEPTIONIST_NAME}. How may I direct your call or assist you today?",
-            "actions": []
-        }
-
-    # 7. Hours & Schedule
-    if any(w in text for w in ["hour", "open", "close", "timing", "when are you open"]):
-        res = await get_company_info(topic="hours")
-        return {
-            "reply": f"Our corporate office is open Monday to Friday from 8:30 AM to 5:30 PM EST. We are closed on weekends. How else may I assist you?",
-            "actions": [{"tool": "get_company_info", "args": {"topic": "hours"}}]
-        }
-
-    def get_info_detail(info_res: Dict[str, Any], fallback: str = "") -> str:
-        if isinstance(info_res, dict) and info_res.get("results") and len(info_res["results"]) > 0:
-            return info_res["results"][0].get("details", fallback)
-        return fallback
-
-    # 8. Cafeteria, Dining & Amenities
-    if any(w in text for w in ["cafeteria", "canteen", "coffee", "cafe", "bistro", "food", "lunch", "breakfast", "eat", "dining", "tea"]):
-        res = await get_company_info(topic="amenities")
-        detail = get_info_detail(res, "The 4th Floor Sky Lounge Bistro offers artisan coffee, breakfast, and lunch from 7:30 AM to 3:00 PM.")
-        return {
-            "reply": f"{detail} It is open to all visitors and staff.",
-            "actions": [{"tool": "get_company_info", "args": {"topic": "amenities"}}]
-        }
-
-    # 9. Location, Address, Parking & Transit
-    if any(w in text for w in ["location", "address", "where", "direction", "directions", "parking", "garage", "subway", "metro", "transit"]):
-        topic = "parking" if "parking" in text or "garage" in text else "location"
-        res = await get_company_info(topic=topic)
-        detail = get_info_detail(res, f"{config.COMPANY_NAME} is located at {config.COMPANY_LOCATION}.")
-        return {
-            "reply": f"{detail} How may I help you further?",
-            "actions": [{"tool": "get_company_info", "args": {"topic": topic}}]
-        }
-
-    # 10. Wi-Fi & Guest Badges / Security
-    if any(w in text for w in ["wifi", "wi-fi", "internet", "password", "network", "badge", "security", "pass", "id required"]):
-        topic = "wifi" if any(k in text for k in ["wifi", "wi-fi", "internet", "password", "network"]) else "visitor_policy"
-        res = await get_company_info(topic=topic)
-        detail = get_info_detail(res, "High-speed guest Wi-Fi is available across all floors. Network name: 'HR-Guest'. Password: 'HRGuest2026!'.")
-        return {
-            "reply": detail,
-            "actions": [{"tool": "get_company_info", "args": {"topic": topic}}]
-        }
-
-    # 11. Courier, Deliveries & Packages
-    if any(w in text for w in ["courier", "delivery", "deliveries", "package", "mail", "fedex", "ups", "dhl", "dropoff"]):
-        res = await get_company_info(topic="deliveries")
-        detail = get_info_detail(res, "Deliveries should be directed to the Central Loading Dock on B1 between 8:00 AM and 4:30 PM.")
-        return {
-            "reply": detail,
-            "actions": [{"tool": "get_company_info", "args": {"topic": "deliveries"}}]
-        }
-
-    # 12. View / Check Existing Appointments
-    is_view_appointments = (
-        any(w in text for w in ["appointment", "appointments", "booking", "bookings"]) and
-        any(w in text for w in ["show", "view", "list", "check", "see", "status", "all", "upcoming", "scheduled", "my", "any", "what are"]) and
-        not any(w in text for w in ["cancel", "book", "reserve"])
+    # -------------------------------------------------------------------------
+    # Doctor Directory Listing Inquiry
+    # -------------------------------------------------------------------------
+    is_list_doctors = (
+        any(p in text for p in [
+            "which doctors", "who are the doctors", "list doctors", "all doctors",
+            "available doctors", "what doctors", "show doctors", "view doctors", "names of doctors"
+        ]) or (
+            "doctor" in text and "available" in text and not any(w in text for w in ["book", "reserve", "schedule"])
+        )
     )
-    if is_view_appointments:
+    if is_list_doctors:
+        res = await search_doctors(query="")
+        actions_taken.append({"tool": "search_doctors", "args": {"query": ""}})
+        doc_list = res.get("doctors", [])
+        doc_lines = "\n".join([f"• {d['name']} ({d['specialization']}) — {d['qualification']}, rated {d['rating']}/5 ⭐" for d in doc_list[:10]])
+        return {
+            "reply": f"At {config.COMPANY_NAME}, we have 10 specialist doctors available across all departments:\n{doc_lines}\n\nWhich doctor or medical specialty would you like to consult?",
+            "actions": actions_taken
+        }
+
+    # -------------------------------------------------------------------------
+    # Conversational Appointment Booking Workflow (Steps 1 to 7)
+    # -------------------------------------------------------------------------
+    is_booking_intent = any(w in text for w in [
+        "book", "reserve", "appointment", "schedule", "consult", "see a doctor", "doctor"
+    ]) or (detected_doctor is not None and any(w in text for w in ["yes", "want", "like", "need", "please", "can i", "could i", "slot", "tomorrow", "today", "am", "pm"]))
+
+    if detected_doctor or is_booking_intent:
+        target_doc = detected_doctor or doctor_catalog[0]
+        doc_name = target_doc["name"]
+        spec = target_doc["specialization"]
+        dept = target_doc["department"]
+        appt_date = detected_date or (date.today() + timedelta(days=1)).isoformat()
+        date_label = "tomorrow" if appt_date == (date.today() + timedelta(days=1)).isoformat() else f"on {appt_date}"
+
+        # Step 4 & 5: Check real availability from database
+        avail_res = await check_availability(staff_or_department=doc_name, date_str=appt_date)
+        actions_taken.append({
+            "tool": "check_availability",
+            "args": {"staff_or_department": doc_name, "date_str": appt_date}
+        })
+        open_slots = avail_res.get("available_slots", [])
+
+        has_slot = detected_slot is not None
+        has_name = detected_name is not None
+        has_contact = detected_contact is not None
+
+        # Step 8: If all details are collected, ASK FOR EXPLICIT CONFIRMATION
+        if has_slot and has_name and has_contact:
+            return {
+                "reply": f"Thank you, {detected_name}. I have an appointment ready with {doc_name} ({spec}) {date_label} at {detected_slot} for {detected_name} (contact: {detected_contact}). Would you like me to confirm this booking for you?",
+                "actions": actions_taken
+            }
+
+        # Step 6: Present available slots and ask for missing details
+        slots_str = ", ".join(open_slots[:4]) if open_slots else "no open slots"
+
+        if not has_slot:
+            if not has_name and not has_contact:
+                return {
+                    "reply": f"We have {doc_name}, our specialist in {spec} at the {dept}. Available slots {date_label} are {slots_str}. Which time slot works best for you, and could you please provide your full name and phone number?",
+                    "actions": actions_taken
+                }
+            elif not has_name:
+                return {
+                    "reply": f"Available slots for {doc_name} {date_label} are {slots_str}. Which time slot would you like, and could I please have your full name?",
+                    "actions": actions_taken
+                }
+            elif not has_contact:
+                return {
+                    "reply": f"Available slots for {doc_name} {date_label} are {slots_str}. Which time slot would you like to book for {detected_name}, and what is your contact phone number?",
+                    "actions": actions_taken
+                }
+            else:
+                return {
+                    "reply": f"Available slots for {doc_name} {date_label} are {slots_str}. Which time slot would you like me to reserve for {detected_name}?",
+                    "actions": actions_taken
+                }
+
+        # If slot is present, ask for missing name/contact
+        if not has_name and not has_contact:
+            return {
+                "reply": f"I've noted the {detected_slot} slot with {doc_name} {date_label}. To complete your booking, could you please provide your full name and a phone number or email?",
+                "actions": actions_taken
+            }
+        elif not has_name:
+            return {
+                "reply": f"I have the {detected_slot} slot reserved with {doc_name} {date_label}. Could you please provide your full name?",
+                "actions": actions_taken
+            }
+        elif not has_contact:
+            return {
+                "reply": f"Thank you, {detected_name}. Could you please share a callback phone number or email so I can finalize your reservation with {doc_name} at {detected_slot}?",
+                "actions": actions_taken
+            }
+
+    # -------------------------------------------------------------------------
+    # View Existing Appointments
+    # -------------------------------------------------------------------------
+    if any(w in text for w in ["appointment", "appointments", "booking", "bookings"]) and any(w in text for w in ["show", "view", "list", "check", "my", "upcoming", "status"]):
         db = await get_db()
         try:
             async with db.execute("SELECT visitor_name, staff_name, date, time_slot, status FROM appointments WHERE status != 'Cancelled' ORDER BY date ASC LIMIT 4") as cur:
                 rows = await cur.fetchall()
+            actions_taken.append({"tool": "list_appointments", "args": {}})
             if rows:
                 appts_text = "; ".join([f"{r['visitor_name']} with {r['staff_name']} on {r['date']} at {r['time_slot']}" for r in rows])
                 return {
-                    "reply": f"Here are the scheduled appointments: {appts_text}. You can view and manage all bookings in the Appointments tab on the right.",
-                    "actions": [{"tool": "list_appointments", "args": {}}]
+                    "reply": f"Here are the active appointments: {appts_text}. You can also view all bookings in the Appointments tab.",
+                    "actions": actions_taken
                 }
             else:
                 return {
-                    "reply": "There are currently no active appointments scheduled. Would you like me to book one for you?",
-                    "actions": []
+                    "reply": "There are currently no active appointments scheduled. Would you like me to book one for you with one of our specialist doctors?",
+                    "actions": actions_taken
                 }
         finally:
             await db.close()
 
-    # 13. Cancel Appointment
-    if any(w in text for w in ["cancel appointment", "cancel booking", "cancel my", "cancel an appointment"]):
+    # -------------------------------------------------------------------------
+    # Cancel Appointment
+    # -------------------------------------------------------------------------
+    if any(w in text for w in ["cancel appointment", "cancel booking", "cancel my appointment"]):
         db = await get_db()
         try:
             async with db.execute("SELECT id, visitor_name, staff_name, date, time_slot FROM appointments WHERE status = 'Confirmed' ORDER BY id DESC LIMIT 1") as cur:
@@ -444,290 +744,107 @@ async def handle_demo_chat(query: str) -> Dict[str, Any]:
         finally:
             await db.close()
 
-    # 14. Doctor Lookup, Symptom Guidance & Appointment Booking (Prioritized)
-    all_doctors = [
-        ("Dr. Arun Prakash Sharma", ["arun", "sharma", "cardiologist", "cardiology", "heart", "chest pain", "bp", "blood pressure", "cholesterol"]),
-        ("Dr. Priyanka Venkatesh", ["priyanka", "venkatesh", "dermatologist", "dermatology", "skin", "acne", "rash", "pimples", "hair fall", "hair loss"]),
-        ("Dr. Rajiv Malhotra", ["rajiv", "malhotra", "orthopedic", "orthopedics", "bone", "joint", "knee", "knee pain", "back pain", "fracture"]),
-        ("Dr. Kavitha Raghunathan", ["kavitha", "raghunathan", "pediatric", "pediatrician", "pediatrics", "child", "children", "baby", "infant", "vaccination"]),
-        ("Dr. Siddharth Joshi", ["siddharth", "joshi", "neurologist", "neurology", "brain", "spine", "headache", "migraine", "seizure", "paralysis"]),
-        ("Dr. Meenakshi Sundaram", ["meenakshi", "sundaram", "gynecologist", "gynecology", "women", "obstetrics", "pregnancy", "period", "periods"]),
-        ("Dr. Harsh Vardhan Patel", ["harsh", "patel", "gastro", "gastroenterologist", "gastroenterology", "stomach", "liver", "acidity", "indigestion", "gas"]),
-        ("Dr. Anjali Krishnamurthy", ["anjali", "krishnamurthy", "ophthalmologist", "ophthalmology", "eye", "eyes", "vision", "glasses", "cataract", "lasik"]),
-        ("Dr. Nikhil Banerjee", ["nikhil", "banerjee", "psychiatrist", "psychiatry", "mental", "wellness", "therapy", "depression", "anxiety", "stress", "sleep"]),
-        ("Dr. Lakshmi Narayanan Iyer", ["lakshmi", "iyer", "general physician", "physician", "general medicine", "fever", "checkup", "cold", "cough", "diabetes", "sugar", "sick", "weak", "tooth", "toothache", "teeth", "gum", "gums", "dentist", "dental", "throat", "pain"])
-    ]
-
-    doctor_keywords = [
-        "doctor", "doctors", "dr.", "dr ", "specialist", "physician", "cardiologist", "dermatologist",
-        "orthopedic", "pediatric", "pediatrician", "neurologist", "gynecologist", "gastro",
-        "gastroenterologist", "ophthalmologist", "psychiatrist", "general physician",
-        "consult", "consultation", "patient", "clinic", "hospital", "treatment",
-        "headache", "fever", "chest pain", "back pain", "knee pain", "cough", "cold", "stomach", "acne", "rash", "migraine",
-        "tooth", "toothache", "teeth", "gum", "gums", "throat"
-    ]
-
-    is_list_doctors = (
-        any(p in text for p in ["which doctors", "who are the doctors", "list doctors", "all doctors", "available doctors", "what doctors", "show doctors", "view doctors", "names of doctors"]) or
-        ("doctor" in text and "available" in text and not any(w in text for w in ["book", "reserve"]))
-    )
-
-    if is_list_doctors:
+    # -------------------------------------------------------------------------
+    # Corporate & Facility Info (Hours, Address, Parking, Wi-Fi, Cafeteria)
+    # -------------------------------------------------------------------------
+    if any(w in text for w in ["hour", "open", "close", "timing"]):
+        res = await get_company_info(topic="hours")
+        actions_taken.append({"tool": "get_company_info", "args": {"topic": "hours"}})
         return {
-            "reply": f"At {config.COMPANY_NAME}, we have 10 top specialist doctors available:\n• Dr. Arun Prakash Sharma (Cardiologist)\n• Dr. Priyanka Venkatesh (Dermatologist)\n• Dr. Rajiv Malhotra (Orthopedic Surgeon)\n• Dr. Kavitha Raghunathan (Pediatrician)\n• Dr. Siddharth Joshi (Neurologist)\n• Dr. Meenakshi Sundaram (Gynecologist)\n• Dr. Harsh Vardhan Patel (Gastroenterologist)\n• Dr. Anjali Krishnamurthy (Ophthalmologist)\n• Dr. Nikhil Banerjee (Psychiatrist)\n• Dr. Lakshmi Narayanan Iyer (General Physician)\n\nYou can browse full profiles in the Doctors tab. Which specialist would you like to consult?",
-            "actions": [{"tool": "search_doctors", "args": {"query": "all"}}]
-        }
-
-    # First extract patient name if present (e.g. "for Rahul Verma" or "for Vikram Sharma")
-    patient_name = "Guest Patient"
-    name_match = re.search(r'(?:for|patient|name is)\s+([A-Za-z\s]+?)(?:\s+tomorrow|\s+today|\s+at|\s+on|\s*$)', query, re.IGNORECASE)
-    if name_match:
-        extracted = name_match.group(1).strip()
-        if extracted.lower() not in ["an appointment", "appointment", "doctor", "consultation", "me", "him", "her"]:
-            patient_name = extracted.title()
-
-    searchable_text = text
-    if patient_name.lower() in searchable_text:
-        searchable_text = searchable_text.replace(patient_name.lower(), "")
-
-    matched_doc = None
-    # 1. Exact full doctor name
-    for doc_name, keywords in all_doctors:
-        if doc_name.lower() in searchable_text:
-            matched_doc = doc_name
-            break
-
-    # 2. Check doctor's specific first/last name
-    if not matched_doc:
-        for doc_name, keywords in all_doctors:
-            for kw in keywords[:2]:
-                if re.search(r'\b' + re.escape(kw) + r'\b', searchable_text):
-                    matched_doc = doc_name
-                    break
-            if matched_doc:
-                break
-
-    # 3. Check medical symptoms / specialization
-    if not matched_doc:
-        for doc_name, keywords in all_doctors:
-            for kw in keywords[2:]:
-                if re.search(r'\b' + re.escape(kw) + r'\b', searchable_text):
-                    matched_doc = doc_name
-                    break
-            if matched_doc:
-                break
-
-    is_booking = (
-        any(w in text for w in ["book", "reserve"]) or
-        any(p in text for p in ["take an appointment", "make an appointment", "schedule an appointment", "fix an appointment"])
-    )
-
-    is_doctor_query = matched_doc is not None or any(w in text for w in doctor_keywords)
-
-    if is_doctor_query:
-        # Check if user wants to book an appointment with a doctor
-        if is_booking:
-            target_doctor = matched_doc or "Dr. Arun Prakash Sharma"
-
-            appt_date = date.today().isoformat()
-            if "tomorrow" in text:
-                appt_date = (date.today() + timedelta(days=1)).isoformat()
-            else:
-                date_match = re.search(r'\b(\d{4}-\d{2}-\d{2})\b', text)
-                if date_match:
-                    appt_date = date_match.group(1)
-
-            slot = "10:00 AM"
-            for s in ["09:00 AM", "09:30 AM", "10:00 AM", "10:30 AM", "11:00 AM", "11:30 AM", "01:00 PM", "02:00 PM", "02:30 PM", "03:00 PM", "03:30 PM", "04:00 PM", "04:30 PM"]:
-                if s.lower() in text:
-                    slot = s
-                    break
-            else:
-                t_match = re.search(r'\b(0?[1-9]|1[0-2])(?::([0-5][0-9]))?\s*(am|pm)\b', text)
-                if t_match:
-                    hr = int(t_match.group(1))
-                    mn = t_match.group(2) or "00"
-                    period = t_match.group(3).upper()
-                    slot = f"{hr:02d}:{mn} {period}"
-
-            res = await book_appointment(
-                visitor_name=patient_name,
-                contact_info="patient@health.in",
-                staff_or_department=target_doctor,
-                date_str=appt_date,
-                time_slot=slot,
-                purpose=f"Medical consultation with {target_doctor}"
-            )
-            actions_taken.append({"tool": "book_appointment", "args": {"patient": patient_name, "doctor": target_doctor, "date": appt_date, "slot": slot}})
-
-            if res.get("status") == "confirmed":
-                date_display = "tomorrow" if appt_date == (date.today() + timedelta(days=1)).isoformat() else f"on {appt_date}"
-                return {
-                    "reply": f"Your appointment for {patient_name} with {target_doctor} has been confirmed {date_display} at {slot}. Please arrive 10 minutes early at reception with ID. You can view this booking anytime in the Appointments tab.",
-                    "actions": actions_taken
-                }
-            else:
-                return {
-                    "reply": f"I apologize, but {target_doctor} already has an appointment booked at {slot} on {appt_date}. Would you like me to check other available slots or suggest another specialist?",
-                    "actions": actions_taken
-                }
-
-        # Query doctors information / Symptom guidance
-        db = await get_db()
-        try:
-            if matched_doc:
-                async with db.execute(
-                    "SELECT * FROM doctors WHERE name = ? OR name LIKE ?",
-                    (matched_doc, f"%{matched_doc.split()[-1]}%")
-                ) as cur:
-                    rows = await cur.fetchall()
-            else:
-                async with db.execute(
-                    "SELECT * FROM doctors WHERE name LIKE ? OR specialization LIKE ? OR department LIKE ? OR bio LIKE ? ORDER BY rating DESC LIMIT 3",
-                    (f"%{query}%", f"%{query}%", f"%{query}%", f"%{query}%")
-                ) as cur:
-                    rows = await cur.fetchall()
-
-            doctors_found = [dict(r) for r in rows]
-            actions_taken.append({"tool": "search_doctors", "args": {"query": query}})
-
-            if doctors_found:
-                doc = doctors_found[0]
-                others = ""
-                if len(doctors_found) > 1:
-                    other_names = ", ".join([d["name"] for d in doctors_found[1:3]])
-                    others = f" We also have {other_names} available in our Medical Centre."
-
-                return {
-                    "reply": f"I found {doc['name']}, specialist in {doc['specialization']} ({doc['department']}). {doc['qualification']} with {doc['experience_years']} years experience, rated {doc['rating']}/5 ⭐ ({doc['total_reviews']} reviews). Consultation fee is {doc['consultation_fee']}, available {doc['available_days']}. Status: {doc['status']}.{others} Would you like me to book an appointment with {doc['name']} for you?",
-                    "actions": actions_taken
-                }
-            else:
-                return {
-                    "reply": f"At {config.COMPANY_NAME}, we have 10 top specialist doctors available across Cardiology, Dermatology, Orthopedics, Pediatrics, Neurology, Gynecology, Gastroenterology, Ophthalmology, Psychiatry, and General Medicine. You can browse all doctor profiles in the Doctors tab. Which specialist would you like to consult?",
-                    "actions": actions_taken
-                }
-        finally:
-            await db.close()
-
-    # 15. Corporate Staff Availability Check
-    if any(w in text for w in ["available", "availability", "free", "slot"]):
-        staff = "Rajesh Krishnamurthy"
-        for name in ["Dr. Ananya Sharma", "Rajesh Krishnamurthy", "Meera Iyer", "Vikram Desai", "Priya Nair", "Arjun Mehta", "Kavitha Sundaram", "Rohit Agarwal"]:
-            if name.lower() in text or name.split()[-1].lower() in text:
-                staff = name
-                break
-        today_str = date.today().isoformat()
-        res = await check_availability(staff_or_department=staff, date_str=today_str)
-        actions_taken.append({"tool": "check_availability", "args": {"staff_or_department": staff, "date_str": today_str}})
-        slots = res.get("available_slots", [])[:4]
-        if slots:
-            slots_str = ", ".join(slots)
-            return {
-                "reply": f"{staff} has open time slots today at: {slots_str}. Would you like me to book one of these for you?",
-                "actions": actions_taken
-            }
-        else:
-            return {
-                "reply": f"{staff} has no available slots remaining today. Would you like to leave a message for them?",
-                "actions": actions_taken
-            }
-
-    # 16. Corporate Staff Book appointment
-    if any(w in text for w in ["book", "reserve", "schedule"]):
-        staff = "Rajesh Krishnamurthy"
-        for name in ["Dr. Ananya Sharma", "Rajesh Krishnamurthy", "Meera Iyer", "Vikram Desai", "Priya Nair", "Arjun Mehta", "Kavitha Sundaram", "Rohit Agarwal"]:
-            if name.lower() in text or name.split()[-1].lower() in text:
-                staff = name
-                break
-        today_str = date.today().isoformat()
-        slot = "02:00 PM"
-        for s in ["09:00 AM", "10:00 AM", "11:00 AM", "01:00 PM", "02:00 PM", "03:00 PM", "04:00 PM"]:
-            if s.lower() in text or s.split()[0].lower() in text:
-                slot = s
-                break
-        res = await book_appointment(
-            visitor_name="Guest Caller",
-            contact_info="caller@guest.com",
-            staff_or_department=staff,
-            date_str=today_str,
-            time_slot=slot,
-            purpose="Front Desk Consultation"
-        )
-        actions_taken.append({"tool": "book_appointment", "args": {"staff": staff, "slot": slot}})
-        return {
-            "reply": f"I have booked an appointment with {staff} for you today at {slot}. Your confirmation has been recorded in the Appointments tab.",
+            "reply": f"Our corporate and medical offices are open Monday to Friday from 8:30 AM to 5:30 PM EST. We are closed on weekends. How else may I assist you?",
             "actions": actions_taken
         }
 
-    # 17. Leave message
+    if any(w in text for w in ["location", "address", "where", "direction", "directions", "parking", "garage"]):
+        topic = "parking" if "parking" in text or "garage" in text else "location"
+        res = await get_company_info(topic=topic)
+        actions_taken.append({"tool": "get_company_info", "args": {"topic": topic}})
+        details = res.get("results", [{}])[0].get("details", f"{config.COMPANY_NAME} is located at {config.COMPANY_LOCATION}.")
+        return {
+            "reply": f"{details} How may I assist you further?",
+            "actions": actions_taken
+        }
+
+    if any(w in text for w in ["wifi", "wi-fi", "internet", "password", "network", "badge", "security"]):
+        topic = "wifi" if any(k in text for k in ["wifi", "wi-fi", "internet", "password"]) else "visitor_policy"
+        res = await get_company_info(topic=topic)
+        actions_taken.append({"tool": "get_company_info", "args": {"topic": topic}})
+        details = res.get("results", [{}])[0].get("details", "Guest Wi-Fi: 'HR-Guest', password: 'HRGuest2026!'.")
+        return {
+            "reply": details,
+            "actions": actions_taken
+        }
+
+    # -------------------------------------------------------------------------
+    # Corporate Staff Directory & Messages
+    # -------------------------------------------------------------------------
     if any(w in text for w in ["message", "voicemail", "note"]):
         staff = "Arjun Mehta"
-        for name in ["Dr. Ananya Sharma", "Rajesh Krishnamurthy", "Meera Iyer", "Vikram Desai", "Priya Nair", "Arjun Mehta", "Kavitha Sundaram", "Rohit Agarwal"]:
+        for name in ["Dr. Ananya Sharma", "Rajesh Krishnamurthy", "Meera Iyer", "Vikram Desai", "Priya Nair", "Arjun Mehta", "Kavitha Sundaram"]:
             if name.lower() in text or name.split()[-1].lower() in text:
                 staff = name
                 break
-        res = await leave_message(
-            caller_name="Guest Caller",
-            contact_info="caller@guest.com",
-            recipient_name=staff,
-            message=query,
-            urgency="Normal"
-        )
+        res = await leave_message(caller_name="Guest Caller", contact_info="caller@guest.com", recipient_name=staff, message=raw_query)
         actions_taken.append({"tool": "leave_message", "args": {"recipient": staff}})
         return {
             "reply": f"I have recorded your message for {staff}. They will be notified and will follow up with you as soon as possible.",
             "actions": actions_taken
         }
 
-    # 18. Staff directory lookup
-    if any(w in text for w in ["directory", "who is", "extension", "contact", "ceo", "engineer", "sales", "hr", "finance", "support", "product", "it"]):
-        res = await lookup_directory(query=query)
-        actions_taken.append({"tool": "lookup_directory", "args": {"query": query}})
-        staff_list = res.get("staff", []) if isinstance(res.get("staff"), list) else res.get("directory", [])
+    if any(w in text for w in ["who is", "extension", "contact", "ceo", "director", "directory"]):
+        res = await lookup_directory(query=raw_query)
+        actions_taken.append({"tool": "lookup_directory", "args": {"query": raw_query}})
+        staff_list = res.get("directory", [])
         if staff_list:
             p = staff_list[0]
             return {
-                "reply": f"{p['name']} is our {p['title']} in {p['department']}. Their status is currently '{p.get('current_status', p.get('status', 'Unknown'))}' at extension {p.get('extension', p.get('phone_extension', 'N/A'))}. Would you like me to connect you or check their availability?",
+                "reply": f"{p['name']} is our {p['title']} in {p['department']}. Their status is currently '{p.get('current_status', 'Available')}' at extension {p.get('extension', 'N/A')}. Would you like me to connect you or check their availability?",
                 "actions": actions_taken
             }
 
-    # 19. Semantic Database Search Fallback
-    db = await get_db()
-    try:
-        # Check company info
-        async with db.execute("SELECT title, content FROM company_info WHERE title LIKE ? OR content LIKE ?", (f"%{query}%", f"%{query}%")) as cur:
-            ci = await cur.fetchone()
-        if ci:
-            return {
-                "reply": f"{ci['content']}. Is there anything else I can help you with at {config.COMPANY_NAME}?",
-                "actions": [{"tool": "get_company_info", "args": {"query": query}}]
-            }
+    # -------------------------------------------------------------------------
+    # Greetings, Identity & Etiquette
+    # -------------------------------------------------------------------------
+    if any(p in text for p in ["who are you", "what is your name", "what's your name", "who is jack", "tell me about yourself"]):
+        return {
+            "reply": f"Hello! My name is {config.RECEPTIONIST_NAME}, the AI Voice Receptionist for {config.COMPANY_NAME}. I assist patients with discovering specialist doctors, checking real appointment slots, and completing verified medical bookings, as well as office directions and corporate logistics. How may I assist you today?",
+            "actions": []
+        }
 
-        # Check staff directory
-        async with db.execute("SELECT name, title, department, status, bio FROM staff_directory WHERE name LIKE ? OR department LIKE ? OR bio LIKE ?", (f"%{query}%", f"%{query}%", f"%{query}%")) as cur:
-            st = await cur.fetchone()
-        if st:
-            return {
-                "reply": f"{st['name']} is our {st['title']} in {st['department']}. Status: {st['status']}. {st['bio']}",
-                "actions": [{"tool": "lookup_directory", "args": {"query": query}}]
-            }
-    finally:
-        await db.close()
+    if any(re.search(r'\b' + re.escape(w) + r'\b', text) for w in ["hello", "hi", "hey", "good morning", "good afternoon", "greetings"]):
+        return {
+            "reply": f"Good day! Welcome to {config.COMPANY_NAME}. My name is {config.RECEPTIONIST_NAME}. How may I assist you with your appointment or inquiry today?",
+            "actions": []
+        }
 
-    # Intelligent Conversational Fallback
+    if any(p in text for p in ["thank you", "thanks", "appreciate it"]):
+        return {
+            "reply": f"You're very welcome! It's always my pleasure to assist you at {config.COMPANY_NAME}. Please let me know if there's anything else you need.",
+            "actions": []
+        }
+
+    if any(p in text for p in ["bye", "goodbye", "see you", "have a nice day"]):
+        return {
+            "reply": f"Thank you for contacting {config.COMPANY_NAME}. Have a wonderful day ahead, and please reach out anytime!",
+            "actions": []
+        }
+
+    # Conversational Fallback
     return {
-        "reply": f"Thank you for contacting {config.COMPANY_NAME}. I am Jack, your front desk concierge. I can help you book appointments with our 10 specialist doctors across all departments, schedule meetings with our corporate team, check office directions and hours, or take a detailed message. How may I best assist you?",
+        "reply": f"Thank you for contacting {config.COMPANY_NAME}. I am Jack, your AI Voice Receptionist. I can help you search and book appointments with our 10 specialist doctors across Cardiology, Dermatology, Orthopedics, Pediatrics, Neurology, and more, or assist with office directions and messages. How may I assist you today?",
         "actions": []
     }
+
+# Keep handle_demo_chat for backwards compatibility
+handle_demo_chat = handle_conversational_chat
 
 # 7. Text Chat & Fallback Endpoint
 @router.post("/chat")
 async def text_chat_endpoint(chat_req: TextChatRequest):
     active_key = (chat_req.api_key or config.GEMINI_API_KEY).strip()
-    if not active_key:
-        # Fall back to built-in front-desk knowledge engine instead of failing
-        return await handle_demo_chat(chat_req.message)
+    if not config.is_valid_gemini_key(active_key):
+        # Fall back to built-in front-desk knowledge and conversational booking engine
+        return await handle_conversational_chat(chat_req.message, chat_req.history)
 
     try:
         from google import genai
@@ -741,16 +858,20 @@ You represent a premier medical centre and hospital consultation clinic.
 You are professional, articulate, empathetic, and highly efficient.
 Today's date is {date.today().isoformat()}.
 
-Your duties:
-1. Greet patients, callers, and visitors warmly and respectfully.
-2. Answer inquiries about the facility, address ({config.COMPANY_LOCATION}), operating hours ({config.COMPANY_HOURS}), visitor badges, and parking using `get_company_info`.
-3. Search for doctors, medical specialists, and departments using `search_doctors`.
-4. Check doctor and staff availability using `check_availability` and book appointments using `book_appointment`.
-5. If a requested doctor or staff member is unavailable, offer to check alternative slots or take a detailed message with `leave_message`.
-6. Look up hospital team members or departments using `lookup_directory`.
-7. Transfer callers when appropriate using `transfer_call`.
-
-Keep your answers conversational, concise, and helpful as a hospital front-desk professional would speak. Avoid lengthy monologues. Mention that callers can view all booked appointments and doctor schedules directly in the Appointments and Doctors tabs on the dashboard.
+MANDATORY HEALTHCARE APPOINTMENT BOOKING PROTOCOL:
+When a patient expresses an intent to book an appointment (e.g. "book an appointment with a cardiologist", "I need to see a doctor for skin rash"):
+1. Search actual doctors from the database using `search_doctors(query=..., specialization=...)`.
+2. Check real doctor availability using `check_availability(staff_or_department=doctor_name, date_str=...)`.
+3. Present available doctors and appointment slots verbally (e.g. "We have Dr. Arun Prakash Sharma, our specialist in Cardiology at the Heart & Vascular Centre. Available slots for tomorrow are 10:00 AM, 11:00 AM, and 2:00 PM. What time works best for you?").
+4. Collect all required patient information: patient's full name, contact phone/email, and preferred slot.
+5. EXPLICIT CONFIRMATION (CRITICAL):
+   Before booking, ALWAYS ask for explicit patient confirmation:
+   "I have an appointment with [Doctor] on [Date] at [Time] for [Patient Name] (contact: [Contact]). Would you like me to confirm this booking for you?"
+6. EXECUTE & VERIFY:
+   ONLY after the patient explicitly confirms (e.g. "Yes", "Confirm", "Yes please", "Go ahead"), execute `book_appointment(...)`.
+7. Verify that the appointment was successfully saved from the tool result, then speak the final confirmed booking ID and arrival instructions.
+- NEVER claim an appointment is booked unless the database confirms successful booking.
+- NEVER invent doctors, availability or appointment slots.
 """
 
         # Build contents list supporting conversation history
@@ -838,8 +959,9 @@ Keep your answers conversational, concise, and helpful as a hospital front-desk 
         }
     except Exception as e:
         logger.error(f"Gemini API chat error: {e}", exc_info=True)
-        # Graceful fallback to demo chat handler if network/key issues occur
+        # Graceful fallback to conversational chat engine if network/key issues occur
         try:
-            return await handle_demo_chat(chat_req.message)
-        except Exception:
+            return await handle_conversational_chat(chat_req.message, chat_req.history)
+        except Exception as inner_ex:
+            logger.error(f"Conversational fallback error: {inner_ex}", exc_info=True)
             raise HTTPException(status_code=500, detail=str(e))

@@ -156,6 +156,9 @@ async def check_availability(staff_or_department: str, date_str: str) -> Dict[st
         matched_name = None
         matched_dept = None
         staff_status = "Available"
+        doc_rows = None
+        doctor_slots_raw = None
+        doctor_days = None
 
         if staff_rows:
             matched_name = staff_rows[0]["name"]
@@ -164,7 +167,7 @@ async def check_availability(staff_or_department: str, date_str: str) -> Dict[st
         else:
             # Check doctors directory
             async with db.execute(
-                "SELECT name, specialization, department, status, available_slots FROM doctors WHERE name LIKE ? OR specialization LIKE ? OR department LIKE ?",
+                "SELECT name, specialization, department, status, available_slots, available_days FROM doctors WHERE name LIKE ? OR specialization LIKE ? OR department LIKE ?",
                 (f"%{staff_or_department}%", f"%{staff_or_department}%", f"%{staff_or_department}%")
             ) as cursor:
                 doc_rows = await cursor.fetchall()
@@ -172,6 +175,8 @@ async def check_availability(staff_or_department: str, date_str: str) -> Dict[st
                 matched_name = doc_rows[0]["name"]
                 matched_dept = doc_rows[0]["department"] or doc_rows[0]["specialization"]
                 staff_status = doc_rows[0]["status"]
+                doctor_slots_raw = doc_rows[0]["available_slots"]
+                doctor_days = doc_rows[0]["available_days"]
             else:
                 return {
                     "status": "not_found",
@@ -188,9 +193,15 @@ async def check_availability(staff_or_department: str, date_str: str) -> Dict[st
             booked_rows = await cursor.fetchall()
             booked_slots = {row["time_slot"] for row in booked_rows}
 
-        available = [slot for slot in ALL_SLOTS if slot not in booked_slots]
+        candidate_slots = ALL_SLOTS
+        if doc_rows and doctor_slots_raw:
+            parsed_doc_slots = [s.strip() for s in doctor_slots_raw.split(",") if s.strip()]
+            if parsed_doc_slots:
+                candidate_slots = parsed_doc_slots
 
-        return {
+        available = [slot for slot in candidate_slots if slot not in booked_slots]
+
+        result_payload = {
             "status": "success",
             "staff_name": matched_name,
             "department": matched_dept,
@@ -199,6 +210,10 @@ async def check_availability(staff_or_department: str, date_str: str) -> Dict[st
             "available_slots": available[:6],  # Suggest up to 6 convenient slots
             "total_open_slots": len(available)
         }
+        if doc_rows and doctor_days:
+            result_payload["available_days"] = doctor_days
+
+        return result_payload
     finally:
         await db.close()
 

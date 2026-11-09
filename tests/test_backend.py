@@ -231,5 +231,73 @@ class TestReceptionistBackend(unittest.TestCase):
         cfg = call_kwargs["config"]
         self.assertTrue(cfg.automatic_function_calling.disable)
 
+    def test_13_full_patient_conversational_voice_booking_flow(self):
+        """Test full conversational journey:
+        1. Spoken intent -> search doctor & check availability.
+        2. Follow-up missing info collection -> explicit confirmation prompt.
+        3. Explicit confirmation -> actual database booking verified.
+        """
+        history = []
+
+        # Turn 1: Patient expresses intent to book a cardiologist
+        res1 = self.client.post("/api/chat", json={
+            "message": "Hey Jack, book an appointment with a cardiologist.",
+            "history": history
+        })
+        self.assertEqual(res1.status_code, 200)
+        d1 = res1.json()
+        self.assertIn("Dr. Arun Prakash Sharma", d1["reply"])
+        self.assertIn("slots", d1["reply"].lower())
+        self.assertTrue(any(a["tool"] == "check_availability" for a in d1.get("actions", [])))
+
+        history.append({"role": "user", "text": "Hey Jack, book an appointment with a cardiologist."})
+        history.append({"role": "model", "text": d1["reply"]})
+
+        # Turn 2: Patient provides missing slot, name, contact
+        res2 = self.client.post("/api/chat", json={
+            "message": "Tomorrow at 11:00 AM. My name is Sarah Connor, phone is 9876501234.",
+            "history": history
+        })
+        self.assertEqual(res2.status_code, 200)
+        d2 = res2.json()
+        self.assertIn("confirm", d2["reply"].lower())
+        self.assertIn("Sarah Connor", d2["reply"])
+        self.assertIn("11:00 AM", d2["reply"])
+
+        history.append({"role": "user", "text": "Tomorrow at 11:00 AM. My name is Sarah Connor, phone is 9876501234."})
+        history.append({"role": "model", "text": d2["reply"]})
+
+        # Turn 3: Patient gives explicit confirmation
+        res3 = self.client.post("/api/chat", json={
+            "message": "Yes, please confirm.",
+            "history": history
+        })
+        self.assertEqual(res3.status_code, 200)
+        d3 = res3.json()
+        self.assertIn("confirmed", d3["reply"].lower())
+        self.assertIn("#", d3["reply"])
+        self.assertTrue(any(a["tool"] == "book_appointment" for a in d3.get("actions", [])))
+
+        # Verify verified booking in database
+        async def check_and_clean_db():
+            db = await get_db()
+            try:
+                async with db.execute(
+                    "SELECT * FROM appointments WHERE visitor_name = 'Sarah Connor' AND status = 'Confirmed'"
+                ) as cur:
+                    row = await cur.fetchone()
+                if row:
+                    await db.execute("DELETE FROM appointments WHERE visitor_name = 'Sarah Connor'")
+                    await db.commit()
+                return row
+            finally:
+                await db.close()
+
+        row = asyncio.run(check_and_clean_db())
+        self.assertIsNotNone(row)
+        self.assertEqual(row["visitor_name"], "Sarah Connor")
+        self.assertEqual(row["time_slot"], "11:00 AM")
+        self.assertIn("Dr. Arun Prakash Sharma", row["staff_name"])
+
 if __name__ == "__main__":
     unittest.main()

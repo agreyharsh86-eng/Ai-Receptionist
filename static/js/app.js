@@ -21,7 +21,8 @@ document.addEventListener('DOMContentLoaded', () => {
         isJackSpeaking: false,
         visualizerAnimationId: null,
         currentVolume: 0,
-        companyInfo: null
+        companyInfo: null,
+        chatHistory: []
     };
 
     // DOM Elements
@@ -295,12 +296,26 @@ document.addEventListener('DOMContentLoaded', () => {
             window.speechSynthesis.resume();
         } catch (e) { }
 
-        const utter = new SpeechSynthesisUtterance(text);
-        utter.rate = 1.05;
+        // Clean markdown symbols for smooth, natural voice speech synthesis
+        const spokenText = (text || '')
+            .replace(/\*\*(.*?)\*\*/g, '$1')
+            .replace(/\*(.*?)\*/g, '$1')
+            .replace(/^#+\s+/gm, '')
+            .replace(/•\s*/g, '')
+            .replace(/\[(.*?)\]\(.*?\)/g, '$1')
+            .trim();
+
+        if (!spokenText) {
+            if (onComplete) onComplete();
+            return;
+        }
+
+        const utter = new SpeechSynthesisUtterance(spokenText);
+        utter.rate = 1.0;
         utter.pitch = 1.0;
 
         const voices = window.speechSynthesis.getVoices();
-        const preferred = voices.find(v => (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Samantha') || v.name.includes('Zira') || v.name.includes('Jenny')) && v.lang.startsWith('en'));
+        const preferred = voices.find(v => (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Samantha') || v.name.includes('Zira') || v.name.includes('Jenny') || v.name.includes('David')) && v.lang.startsWith('en'));
         if (preferred) utter.voice = preferred;
 
         utter.onstart = () => {
@@ -339,23 +354,44 @@ document.addEventListener('DOMContentLoaded', () => {
         updateLiveBadge('listening', 'Listening...');
         appendTranscriptMessage('system', 'Connected to Jack via Voice Assistant mode. Speak into your microphone!');
 
-        // Greeting
-        const greetingText = "Good day! Welcome to HR Enterprises. My name is Jack, your virtual receptionist. How may I assist you today?";
-        appendTranscriptMessage('model', greetingText);
-        speakJack(greetingText);
+        // Initial Greeting
+        if (state.chatHistory.length === 0) {
+            const greetingText = "Good day! Welcome to HR Enterprises. My name is Jack, your AI Voice Receptionist. How may I assist you with your appointment or inquiry today?";
+            state.chatHistory.push({ role: 'model', text: greetingText });
+            appendTranscriptMessage('model', greetingText);
+            speakJack(greetingText);
+        }
 
         const recognition = new SpeechRec();
         recognition.continuous = true;
         recognition.interimResults = false;
         recognition.lang = 'en-US';
 
+        // Barge-in / Interruption handling: stop Jack if caller speaks
+        recognition.onspeechstart = () => {
+            if (state.isJackSpeaking) {
+                try { window.speechSynthesis.cancel(); } catch (e) { }
+                state.isJackSpeaking = false;
+                updateLiveBadge('listening', 'Listening...');
+            }
+        };
+
         recognition.onresult = async (event) => {
             const last = event.results.length - 1;
             const transcript = event.results[last][0].transcript.trim();
-            if (!transcript || state.isMuted || state.isJackSpeaking) return;
+            if (!transcript || state.isMuted) return;
+
+            // Stop Jack if he was speaking when user spoken input arrived
+            if (state.isJackSpeaking) {
+                try { window.speechSynthesis.cancel(); } catch (e) { }
+                state.isJackSpeaking = false;
+            }
 
             appendTranscriptMessage('user', transcript);
             updateLiveBadge('processing', 'Jack Thinking...');
+
+            // Track conversation history
+            state.chatHistory.push({ role: 'user', text: transcript });
 
             try {
                 const res = await fetch('/api/chat', {
@@ -363,6 +399,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         message: transcript,
+                        history: state.chatHistory,
                         api_key: state.apiKey
                     })
                 });
@@ -370,12 +407,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.detail || 'Chat request failed');
 
+                state.chatHistory.push({ role: 'model', text: data.reply });
                 appendTranscriptMessage('model', data.reply);
                 speakJack(data.reply);
 
                 if (data.actions && data.actions.length > 0) {
                     loadAppointments();
                     loadMessages();
+                    loadDoctors();
                 }
             } catch (err) {
                 console.error('Speech interaction error:', err);
@@ -534,16 +573,39 @@ document.addEventListener('DOMContentLoaded', () => {
             muteBtn.classList.add('muted');
             muteIcon.textContent = '🔇';
             muteLabel.textContent = 'Unmute';
+            const micVoiceBtn = document.getElementById('micVoiceBtn');
+            if (micVoiceBtn) {
+                micVoiceBtn.style.background = 'rgba(239, 68, 68, 0.25)';
+                micVoiceBtn.style.borderColor = 'rgba(239, 68, 68, 0.6)';
+            }
             showToast('Microphone muted', 'info');
         } else {
             muteBtn.classList.remove('muted');
             muteIcon.textContent = '🎙️';
             muteLabel.textContent = 'Mute';
+            const micVoiceBtn = document.getElementById('micVoiceBtn');
+            if (micVoiceBtn) {
+                micVoiceBtn.style.background = 'rgba(16, 185, 129, 0.25)';
+                micVoiceBtn.style.borderColor = 'rgba(16, 185, 129, 0.6)';
+            }
             showToast('Microphone active', 'info');
         }
     }
 
     function updateCallUiState(isActive) {
+        const micVoiceBtn = document.getElementById('micVoiceBtn');
+        if (micVoiceBtn) {
+            if (isActive) {
+                micVoiceBtn.style.background = 'rgba(16, 185, 129, 0.25)';
+                micVoiceBtn.style.borderColor = 'rgba(16, 185, 129, 0.6)';
+                micVoiceBtn.title = 'Microphone Active (Click to mute/unmute)';
+            } else {
+                micVoiceBtn.style.background = 'rgba(255, 255, 255, 0.08)';
+                micVoiceBtn.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+                micVoiceBtn.title = 'Speak via Microphone';
+            }
+        }
+
         if (isActive) {
             startCallBtn.style.display = 'none';
             endCallBtn.style.display = 'flex';
@@ -566,8 +628,9 @@ document.addEventListener('DOMContentLoaded', () => {
     function showToolExecution(toolName, args) {
         activeToolBanner.style.display = 'flex';
         let label = 'Processing front-desk request...';
-        if (toolName === 'check_availability') label = 'Checking calendar slot availability...';
-        else if (toolName === 'book_appointment') label = `Booking appointment for ${args.visitor_name || 'visitor'}...`;
+        if (toolName === 'search_doctors') label = 'Searching specialist doctors in directory...';
+        else if (toolName === 'check_availability') label = 'Checking real calendar availability...';
+        else if (toolName === 'book_appointment') label = `Confirming verified appointment with ${args.staff_or_department || 'doctor'}...`;
         else if (toolName === 'cancel_appointment') label = 'Cancelling scheduled appointment...';
         else if (toolName === 'leave_message') label = `Logging message for ${args.recipient_name || 'staff member'}...`;
         else if (toolName === 'lookup_directory') label = `Searching directory for '${args.query || ''}'...`;
@@ -623,6 +686,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         chatInput.value = '';
         appendTranscriptMessage('user', query);
+        state.chatHistory.push({ role: 'user', text: query });
 
         if (state.isCallActive && state.ws && state.ws.readyState === WebSocket.OPEN) {
             // Forward text into live session
@@ -632,7 +696,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }));
             updateLiveBadge('processing', 'Thinking...');
         } else {
-            // Fallback REST Chat
+            // Conversational REST Chat
             updateLiveBadge('processing', 'Jack Thinking...');
             try {
                 const res = await fetch('/api/chat', {
@@ -640,6 +704,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         message: query,
+                        history: state.chatHistory,
                         api_key: state.apiKey
                     })
                 });
@@ -649,6 +714,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     throw new Error(data.detail || 'Chat request failed');
                 }
 
+                state.chatHistory.push({ role: 'model', text: data.reply });
                 appendTranscriptMessage('model', data.reply);
                 updateLiveBadge('idle', 'Standby');
 
@@ -1153,72 +1219,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Quick Voice Mic Button
+    // Quick Voice Mic Button: One-click Start / Toggle voice interaction
     const micVoiceBtn = document.getElementById('micVoiceBtn');
-    let quickRecognition = null;
-    let isQuickListening = false;
-
     if (micVoiceBtn) {
         micVoiceBtn.addEventListener('click', () => {
-            const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-            if (!SpeechRec) {
-                showToast('Web Speech is not supported in this browser. Try Chrome or Edge.', 'warning');
-                return;
-            }
-
-            if (isQuickListening) {
-                if (quickRecognition) {
-                    try { quickRecognition.stop(); } catch (e) { }
-                }
-                isQuickListening = false;
-                micVoiceBtn.style.background = 'rgba(255, 255, 255, 0.08)';
-                micVoiceBtn.style.borderColor = 'rgba(255, 255, 255, 0.15)';
-                return;
-            }
-
-            try {
-                quickRecognition = new SpeechRec();
-                quickRecognition.continuous = false;
-                quickRecognition.interimResults = false;
-                quickRecognition.lang = 'en-US';
-
-                quickRecognition.onstart = () => {
-                    isQuickListening = true;
-                    micVoiceBtn.style.background = 'rgba(16, 185, 129, 0.35)';
-                    micVoiceBtn.style.borderColor = 'rgba(16, 185, 129, 0.8)';
-                    showToast('Jack is listening... Speak your question now', 'info');
-                    updateLiveBadge('listening', 'Listening...');
-                };
-
-                quickRecognition.onresult = (event) => {
-                    const text = event.results[0][0].transcript.trim();
-                    if (text) {
-                        chatInput.value = text;
-                        sendTextMessage(text);
-                    }
-                };
-
-                quickRecognition.onerror = (e) => {
-                    console.warn('Mic button error:', e.error);
-                    if (e.error !== 'no-speech') {
-                        showToast(`Microphone notice: ${e.error}`, 'info');
-                    }
-                    isQuickListening = false;
-                    micVoiceBtn.style.background = 'rgba(255, 255, 255, 0.08)';
-                    micVoiceBtn.style.borderColor = 'rgba(255, 255, 255, 0.15)';
-                    updateLiveBadge('idle', 'Standby');
-                };
-
-                quickRecognition.onend = () => {
-                    isQuickListening = false;
-                    micVoiceBtn.style.background = 'rgba(255, 255, 255, 0.08)';
-                    micVoiceBtn.style.borderColor = 'rgba(255, 255, 255, 0.15)';
-                };
-
-                quickRecognition.start();
-            } catch (err) {
-                console.error('Quick voice recognition error:', err);
-                showToast('Microphone access denied or unavailable', 'error');
+            if (state.isCallActive) {
+                toggleMute();
+            } else {
+                startVoiceCall();
             }
         });
     }

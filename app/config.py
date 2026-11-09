@@ -15,6 +15,19 @@ GEMINI_LIVE_MODEL = os.getenv("GEMINI_LIVE_MODEL", "gemini-3.1-flash-live-previe
 GEMINI_FALLBACK_MODEL = os.getenv("GEMINI_FALLBACK_MODEL", "gemini-2.5-flash")
 DEFAULT_VOICE = os.getenv("DEFAULT_VOICE", "Aoede")  # Options: Aoede, Puck, Charon, Fenrir, Kore
 
+def is_valid_gemini_key(key: str) -> bool:
+    """Validate whether an API key is a genuine Gemini API key and not a placeholder."""
+    if not key:
+        return False
+    k = key.strip().lower()
+    if k.startswith("your_") or k.startswith("placeholder") or "api_key_here" in k or len(k) < 15:
+        return False
+    return True
+
+def has_valid_api_key() -> bool:
+    """Check if a valid Gemini API key is configured."""
+    return is_valid_gemini_key(GEMINI_API_KEY)
+
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8000"))
 
