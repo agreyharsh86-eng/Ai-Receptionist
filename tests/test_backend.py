@@ -299,5 +299,121 @@ class TestReceptionistBackend(unittest.TestCase):
         self.assertEqual(row["time_slot"], "11:00 AM")
         self.assertIn("Dr. Arun Prakash Sharma", row["staff_name"])
 
+    def test_14_book_appointment_with_aliases_and_verification(self):
+        """Test parameter alias resilience, database write verification, and conflict detection."""
+        async def run_alias_tests():
+            tomorrow = (date.today() + timedelta(days=1)).isoformat()
+
+            # 1. Book using aliases: patient_name, doctor, date="tomorrow", slot="02:30 pm"
+            res1 = await book_appointment(
+                patient_name="Michael Scott",
+                phone="555-0192",
+                doctor="Dr. Priya",  # Partial doctor name matching Dr. Priyanka Venkatesh (Dermatology)
+                date="tomorrow",
+                slot="02:30 pm",
+                reason="Skin allergy checkup"
+            )
+
+            # 2. Duplicate booking attempt for the same slot
+            res2 = await book_appointment(
+                patient_name="Dwight Schrute",
+                doctor="Dr. Priyanka Venkatesh",
+                date=tomorrow,
+                slot="02:30 PM"
+            )
+
+            # 3. Missing patient name
+            res3 = await book_appointment(
+                doctor="Dr. Priyanka Venkatesh",
+                date=tomorrow,
+                slot="03:00 PM"
+            )
+
+            # Clean up
+            db = await get_db()
+            try:
+                await db.execute("DELETE FROM appointments WHERE visitor_name IN ('Michael Scott', 'Dwight Schrute')")
+                await db.commit()
+            finally:
+                await db.close()
+
+            return res1, res2, res3
+
+        res1, res2, res3 = asyncio.run(run_alias_tests())
+
+        # Test 1 assertions
+        self.assertEqual(res1["status"], "confirmed")
+        self.assertTrue(res1["verified"])
+        self.assertEqual(res1["patient_name"], "Michael Scott")
+        self.assertEqual(res1["time_slot"], "02:30 PM")
+        self.assertIn("Dr. Priyanka Venkatesh", res1["doctor_name"])
+
+        # Test 2 assertions (conflict)
+        self.assertEqual(res2["status"], "conflict")
+        self.assertIn("already has an appointment", res2["message"])
+
+        # Test 3 assertions (missing patient name)
+        self.assertEqual(res3["status"], "error")
+        self.assertEqual(res3["error_type"], "missing_patient_name")
+
+    @patch("google.genai.Client")
+    def test_15_gemini_api_book_appointment_tool_execution(self, mock_client_cls):
+        """Verify that when Gemini model calls book_appointment with aliases, it is executed and saved in DB."""
+        tomorrow = (date.today() + timedelta(days=1)).isoformat()
+        fc = types.FunctionCall(
+            name="book_appointment",
+            args={
+                "patient_name": "Diana Prince",
+                "phone": "+1-555-0199",
+                "doctor": "Dr. Arun Prakash Sharma",
+                "date": tomorrow,
+                "slot": "04:00 PM",
+                "reason": "Cardiology consult"
+            }
+        )
+        resp1 = MagicMock()
+        resp1.function_calls = [fc]
+        resp1.candidates = [MagicMock(content=types.Content(role="model", parts=[types.Part.from_function_call(name=fc.name, args=fc.args)]))]
+        resp1.text = None
+
+        resp2 = MagicMock()
+        resp2.function_calls = None
+        resp2.text = "Your appointment with Dr. Arun Prakash Sharma has been successfully booked for tomorrow at 04:00 PM!"
+
+        mock_instance = MagicMock()
+        mock_instance.aio.models.generate_content = AsyncMock(side_effect=[resp1, resp2])
+        mock_client_cls.return_value = mock_instance
+
+        res = self.client.post("/api/chat", json={
+            "message": "Yes, please book the appointment for Diana Prince",
+            "api_key": "valid_mock_gemini_key_12345"
+        })
+
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertIn("reply", data)
+        self.assertTrue(any(a["tool"] == "book_appointment" for a in data.get("actions", [])))
+
+        # Verify that Diana Prince was actually saved to SQLite database
+        async def check_booking():
+            db = await get_db()
+            try:
+                async with db.execute(
+                    "SELECT id, visitor_name, staff_name, date, time_slot, status FROM appointments WHERE visitor_name = 'Diana Prince'"
+                ) as cur:
+                    row = await cur.fetchone()
+                if row:
+                    await db.execute("DELETE FROM appointments WHERE visitor_name = 'Diana Prince'")
+                    await db.commit()
+                return row
+            finally:
+                await db.close()
+
+        saved = asyncio.run(check_booking())
+        self.assertIsNotNone(saved)
+        self.assertEqual(saved["visitor_name"], "Diana Prince")
+        self.assertEqual(saved["status"], "Confirmed")
+        self.assertEqual(saved["time_slot"], "04:00 PM")
+
 if __name__ == "__main__":
     unittest.main()

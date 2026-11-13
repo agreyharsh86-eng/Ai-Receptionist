@@ -103,11 +103,11 @@ class LiveSessionManager:
 
     async def run_session(self, inbound_queue: asyncio.Queue):
         """Run the live session loop."""
-        if not self.api_key:
+        if not config.is_valid_gemini_key(self.api_key):
             await self.client_send(
                 {
                     "type": "error",
-                    "message": "Gemini API Key is missing. Please provide your API key in Settings or .env.",
+                    "message": "Gemini API Key is missing or invalid. Please provide your API key in Settings or .env.",
                 }
             )
             return
@@ -238,7 +238,15 @@ class LiveSessionManager:
     ) -> types.FunctionResponse:
         """Helper to execute an individual tool call asynchronously."""
         tool_name = fc.name
-        tool_args = fc.args or {}
+        raw_args = fc.args or {}
+
+        # Safely convert protobuf map or dict-like object to a standard Python dict
+        if hasattr(raw_args, "items"):
+            tool_args = {str(k): v for k, v in raw_args.items()}
+        elif isinstance(raw_args, dict):
+            tool_args = dict(raw_args)
+        else:
+            tool_args = {}
 
         logger.info(
             f"Executing tool: {tool_name} with args: {tool_args}"
