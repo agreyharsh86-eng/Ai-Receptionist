@@ -37,3 +37,27 @@ COMPANY_NAME = "HR Enterprises"
 COMPANY_INDUSTRY = "Enterprise Cloud, AI Solutions & Healthcare Consultation"
 COMPANY_LOCATION = "Tower 4, Suite 1200, 500 Silicon Vista Way, Innovation District"
 COMPANY_HOURS = "Monday to Friday: 8:30 AM – 5:30 PM EST. Saturday & Sunday: Closed."
+
+# MongoDB Database Configuration
+MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://127.0.0.1:27017")
+MONGODB_DB_NAME = os.getenv("MONGODB_DB_NAME", "jack_receptionist")
+
+# Authentication & JWT Configuration
+JWT_SECRET = os.getenv("JWT_SECRET", "jack-ai-receptionist-secret-key-2026-auth-token")
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "10080")) # 7 days
+OTP_EXPIRE_SECONDS = int(os.getenv("OTP_EXPIRE_SECONDS", "30")) # 30 seconds expiry as required
+OTP_MAX_ATTEMPTS = int(os.getenv("OTP_MAX_ATTEMPTS", "3"))
+
+# Email Delivery Configuration (SMTP)
+SMTP_HOST = os.getenv("SMTP_HOST", "")
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+SMTP_USER = os.getenv("SMTP_USER", "")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+SMTP_FROM = os.getenv("SMTP_FROM", "Jack AI Receptionist <noreply@hrenterprises.com>")
+SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() in ("true", "1", "yes")
+
+# SMS Delivery Configuration (Twilio)
+TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID", "")
+TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")
+TWILIO_PHONE_NUMBER = os.getenv("TWILIO_PHONE_NUMBER", "")

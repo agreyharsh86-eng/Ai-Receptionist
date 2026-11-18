@@ -88,13 +88,16 @@
                     <button class="btn-talk-quick" id="quickTalkBtn" title="Open Jack AI Assistant">🎙️</button>
                 </div>
 
-                <div class="user-profile-bar">
-                    <div class="user-avatar">👨‍💼</div>
-                    <div class="user-details">
-                        <span class="user-name">Dr. Administrator</span>
-                        <span class="user-role">Super Admin • Clinic</span>
+                <div class="user-profile-bar" id="sidebarUserProfileBar">
+                    <div class="user-avatar" id="sidebarUserAvatar">👨‍💼</div>
+                    <div class="user-details" id="sidebarUserDetails">
+                        <span class="user-name" id="sidebarUserName">Dr. Administrator</span>
+                        <span class="user-role" id="sidebarUserRole">Super Admin • Clinic</span>
                     </div>
-                    <button class="btn-icon-subtle" id="openSettingsBtn" title="System Settings">⚙️</button>
+                    <div class="user-actions-btns">
+                        <button class="btn-icon-subtle" id="sidebarAuthActionBtn" title="Sign In / Switch Account">🔐</button>
+                        <button class="btn-icon-subtle" id="openSettingsBtn" title="System Settings">⚙️</button>
+                    </div>
                 </div>
             </div>
         </aside>
@@ -154,6 +157,15 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- User Profile & Auth Pill -->
+                    <button class="user-topbar-pill" id="topbarUserPill" title="Account & Authentication">
+                        <span class="user-pill-avatar" id="topbarUserAvatar">👤</span>
+                        <div class="user-pill-info">
+                            <span class="user-pill-name" id="topbarUserName">Sign In</span>
+                            <span class="user-pill-status" id="topbarUserStatus">Guest</span>
+                        </div>
+                    </button>
 
                     <!-- Header Settings -->
                     <button class="btn-topbar-icon" id="headerSettingsBtn" title="Settings">⚙️</button>
@@ -781,6 +793,170 @@
             <div class="modal-footer">
                 <button class="btn-secondary" id="cancelSettingsBtn">Cancel</button>
                 <button class="btn-primary" id="saveSettingsBtn">Save Configuration</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 5: Authentication (Login / Sign Up / OTP) Modal -->
+    <div class="modal-overlay" id="authModal">
+        <div class="modal-card auth-card">
+            <!-- Modal Header -->
+            <div class="modal-header auth-modal-header">
+                <div class="auth-brand-badge">
+                    <span class="auth-brand-symbol">⚡</span>
+                    <span class="auth-brand-name">Jack AI Security</span>
+                </div>
+                <button class="btn-icon" id="closeAuthModalBtn" title="Close">✕</button>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="modal-body auth-modal-body">
+                <!-- Status / Error Notification Banner -->
+                <div class="auth-alert" id="authAlert" style="display: none;"></div>
+
+                <!-- STEP 1: Enter Identifier (Email or Phone) -->
+                <div class="auth-step-panel active" id="authStepRequest">
+                    <div class="auth-intro">
+                        <h2 class="auth-title">Welcome to Jack AI</h2>
+                        <p class="auth-subtitle">Sign in or register using a secure one-time passcode. No password required.</p>
+                    </div>
+
+                    <!-- Auth Channel Tabs (Email vs Phone) -->
+                    <div class="auth-channel-tabs">
+                        <button class="auth-channel-tab active" id="authTabEmail" type="button">
+                            <span class="tab-icon">✉️</span> Email Address
+                        </button>
+                        <button class="auth-channel-tab" id="authTabPhone" type="button">
+                            <span class="tab-icon">📱</span> Phone Number
+                        </button>
+                    </div>
+
+                    <!-- Input Fields -->
+                    <form id="authRequestForm" onsubmit="return false;">
+                        <div class="form-group" id="authNameGroup">
+                            <label for="authNameInput">Full Name <span class="label-optional">(Optional for registration)</span></label>
+                            <input type="text" id="authNameInput" class="form-input" placeholder="e.g. John Doe">
+                        </div>
+
+                        <!-- Email Field -->
+                        <div class="form-group" id="authEmailGroup">
+                            <label for="authEmailInput">Email Address <span class="label-required">*</span></label>
+                            <div class="input-with-icon">
+                                <span class="field-icon">📧</span>
+                                <input type="email" id="authEmailInput" class="form-input" placeholder="user@company.com" autocomplete="email">
+                            </div>
+                        </div>
+
+                        <!-- Phone Field (Hidden by default, shown when phone tab active) -->
+                        <div class="form-group" id="authPhoneGroup" style="display: none;">
+                            <label for="authPhoneInput">Mobile Phone Number <span class="label-required">*</span></label>
+                            <div class="input-with-icon">
+                                <span class="field-icon">📞</span>
+                                <input type="tel" id="authPhoneInput" class="form-input" placeholder="+91 9876543210" autocomplete="tel">
+                            </div>
+                            <p class="form-help">Enter with country code (e.g. +91 9876543210 or 10-digit number)</p>
+                        </div>
+
+                        <div class="auth-security-notice">
+                            <span class="shield-icon">🛡️</span>
+                            <span>A cryptographically secure 6-digit OTP will be dispatched. Valid for <strong>30 seconds</strong>.</span>
+                        </div>
+
+                        <div class="auth-action-row">
+                            <button type="button" class="btn-primary auth-submit-btn" id="sendOtpBtn">
+                                <span class="btn-text">Continue & Send OTP</span>
+                                <span class="btn-arrow">→</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- STEP 2: Verify 6-digit OTP -->
+                <div class="auth-step-panel" id="authStepVerify" style="display: none;">
+                    <div class="auth-intro">
+                        <div class="auth-step-back">
+                            <button class="btn-text-link" id="authBackToRequestBtn">← Change email or phone</button>
+                        </div>
+                        <h2 class="auth-title">Verify Passcode</h2>
+                        <p class="auth-subtitle">
+                            Enter the 6-digit code sent to:
+                            <span class="auth-target-highlight" id="authTargetDisplay">user@example.com</span>
+                        </p>
+                    </div>
+
+                    <!-- 6 Digit OTP Input Grid -->
+                    <div class="otp-inputs-container">
+                        <label class="otp-grid-label">6-Digit Verification Code</label>
+                        <div class="otp-inputs-grid" id="otpInputsGrid">
+                            <input type="text" class="otp-digit-box" maxlength="1" inputmode="numeric" pattern="[0-9]*" data-index="0" autofocus>
+                            <input type="text" class="otp-digit-box" maxlength="1" inputmode="numeric" pattern="[0-9]*" data-index="1">
+                            <input type="text" class="otp-digit-box" maxlength="1" inputmode="numeric" pattern="[0-9]*" data-index="2">
+                            <input type="text" class="otp-digit-box" maxlength="1" inputmode="numeric" pattern="[0-9]*" data-index="3">
+                            <input type="text" class="otp-digit-box" maxlength="1" inputmode="numeric" pattern="[0-9]*" data-index="4">
+                            <input type="text" class="otp-digit-box" maxlength="1" inputmode="numeric" pattern="[0-9]*" data-index="5">
+                        </div>
+                    </div>
+
+                    <!-- Expiry Countdown Timer & Progress Bar -->
+                    <div class="otp-timer-card">
+                        <div class="otp-timer-info">
+                            <div class="timer-badge" id="otpTimerBadge">
+                                <span class="timer-symbol">⏱️</span>
+                                <span>Expires in:</span>
+                                <strong class="timer-digits" id="otpCountdownText">30s</strong>
+                            </div>
+                            <button class="btn-resend-otp" id="authResendBtn" type="button" disabled>
+                                <span>↻ Resend Code</span>
+                            </button>
+                        </div>
+                        <!-- Progress Bar Visual Indicator -->
+                        <div class="timer-track">
+                            <div class="timer-fill" id="otpTimerBar" style="width: 100%;"></div>
+                        </div>
+                        <p class="timer-help" id="otpTimerHelp">Please enter the code within 30 seconds before it expires.</p>
+                    </div>
+
+                    <!-- Verify Action Button -->
+                    <div class="auth-action-row">
+                        <button type="button" class="btn-primary auth-submit-btn" id="verifyOtpBtn">
+                            <span class="btn-text">Verify & Sign In</span>
+                            <span class="btn-arrow">✓</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- STEP 3: Signed-in User State Panel (If modal opened when already logged in) -->
+                <div class="auth-step-panel" id="authStepProfile" style="display: none;">
+                    <div class="auth-intro text-center">
+                        <div class="profile-avatar-large" id="profileLargeAvatar">👨‍💼</div>
+                        <h2 class="auth-title" id="profileLargeName">User Account</h2>
+                        <p class="auth-subtitle" id="profileLargeIdentifier">user@example.com</p>
+                    </div>
+
+                    <div class="profile-meta-list">
+                        <div class="profile-meta-row">
+                            <span class="meta-label">Account Status</span>
+                            <span class="badge-status-pill success">Verified & Active</span>
+                        </div>
+                        <div class="profile-meta-row">
+                            <span class="meta-label">Authentication Type</span>
+                            <span class="meta-value" id="profileMetaAuthType">OTP Verified</span>
+                        </div>
+                        <div class="profile-meta-row">
+                            <span class="meta-label">Member Since</span>
+                            <span class="meta-value" id="profileMetaCreatedAt">—</span>
+                        </div>
+                        <div class="profile-meta-row">
+                            <span class="meta-label">Last Login</span>
+                            <span class="meta-value" id="profileMetaLastLogin">—</span>
+                        </div>
+                    </div>
+
+                    <div class="profile-actions-row">
+                        <button class="btn-secondary" id="authSwitchAccountBtn">Switch Account</button>
+                        <button class="btn-danger" id="authSignOutBtn">Sign Out</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

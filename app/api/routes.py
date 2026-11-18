@@ -1,12 +1,13 @@
 import inspect
 import logging
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime, date, timedelta
 import re
 from app.database import get_db
 import app.config as config
+from app.services.auth_service import get_optional_user
 from app.tools.receptionist_tools import (
     search_doctors,
     check_availability,
@@ -130,10 +131,21 @@ async def list_appointments(status: Optional[str] = None):
         await db.close()
 
 @router.post("/appointments")
-async def create_appointment_endpoint(app_data: AppointmentCreate):
+async def create_appointment_endpoint(
+    app_data: AppointmentCreate,
+    current_user: Optional[dict] = Depends(get_optional_user)
+):
+    visitor_name = app_data.visitor_name
+    contact_info = app_data.contact_info
+    if current_user:
+        if not visitor_name or visitor_name.strip() in ("", "Guest"):
+            visitor_name = current_user.get("name") or current_user.get("email") or current_user.get("phone_number")
+        if not contact_info or contact_info.strip() in ("", "N/A"):
+            contact_info = current_user.get("email") or current_user.get("phone_number")
+
     res = await book_appointment(
-        visitor_name=app_data.visitor_name,
-        contact_info=app_data.contact_info,
+        visitor_name=visitor_name,
+        contact_info=contact_info,
         staff_or_department=app_data.staff_or_department,
         date_str=app_data.date,
         time_slot=app_data.time_slot,

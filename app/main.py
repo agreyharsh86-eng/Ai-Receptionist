@@ -9,7 +9,9 @@ from fastapi.responses import FileResponse
 from pathlib import Path
 
 from app.database import init_db
+from app.database_mongo import init_mongo
 from app.api.routes import router as api_router
+from app.api.auth_routes import router as auth_router
 from app.api.websocket import router as ws_router
 import app.config as config
 
@@ -17,11 +19,14 @@ import app.config as config
 async def lifespan(app: FastAPI):
     # Startup: Initialize SQLite tables and seed data
     await init_db()
+    # Startup: Initialize MongoDB collections and indexes
+    await init_mongo()
     print("=" * 60)
     print(f"[*] {config.COMPANY_NAME} AI Receptionist System Initialized")
     print(f"[*] Receptionist Persona: {config.RECEPTIONIST_NAME}")
     print(f"[*] Gemini API Key configured: {bool(config.GEMINI_API_KEY)}")
     print(f"[*] Live Model: {config.GEMINI_LIVE_MODEL}")
+    print(f"[*] MongoDB URI: {config.MONGODB_URI}")
     print(f"[*] Server running at: http://{config.HOST}:{config.PORT}")
     print("=" * 60)
     yield
@@ -45,6 +50,7 @@ app.add_middleware(
 
 # Mount Routers
 app.include_router(api_router)
+app.include_router(auth_router)
 app.include_router(ws_router)
 
 # Mount Static UI

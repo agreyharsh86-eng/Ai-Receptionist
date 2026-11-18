@@ -33,7 +33,13 @@ document.addEventListener('DOMContentLoaded', () => {
         allMessages: [],
         currentApptFilter: 'all',
         currentMsgFilter: 'all',
-        selectedBookingDoctor: null
+        selectedBookingDoctor: null,
+        authToken: localStorage.getItem('jack_auth_token') || '',
+        currentUser: null,
+        authChannel: 'email',
+        authIdentifier: '',
+        otpTimerInterval: null,
+        otpSecondsLeft: 30
     };
 
     // =========================================================================
@@ -56,6 +62,49 @@ document.addEventListener('DOMContentLoaded', () => {
     const notifDropdownList = document.getElementById('notifDropdownList');
     const headerSettingsBtn = document.getElementById('headerSettingsBtn');
     const openSettingsBtn = document.getElementById('openSettingsBtn');
+
+    // Auth & User Elements
+    const topbarUserPill = document.getElementById('topbarUserPill');
+    const topbarUserAvatar = document.getElementById('topbarUserAvatar');
+    const topbarUserName = document.getElementById('topbarUserName');
+    const topbarUserStatus = document.getElementById('topbarUserStatus');
+    const sidebarUserName = document.getElementById('sidebarUserName');
+    const sidebarUserRole = document.getElementById('sidebarUserRole');
+    const sidebarUserAvatar = document.getElementById('sidebarUserAvatar');
+    const sidebarAuthActionBtn = document.getElementById('sidebarAuthActionBtn');
+
+    // Auth Modal Elements
+    const authModal = document.getElementById('authModal');
+    const closeAuthModalBtn = document.getElementById('closeAuthModalBtn');
+    const authAlert = document.getElementById('authAlert');
+    const authStepRequest = document.getElementById('authStepRequest');
+    const authStepVerify = document.getElementById('authStepVerify');
+    const authStepProfile = document.getElementById('authStepProfile');
+    const authTabEmail = document.getElementById('authTabEmail');
+    const authTabPhone = document.getElementById('authTabPhone');
+    const authNameGroup = document.getElementById('authNameGroup');
+    const authNameInput = document.getElementById('authNameInput');
+    const authEmailGroup = document.getElementById('authEmailGroup');
+    const authEmailInput = document.getElementById('authEmailInput');
+    const authPhoneGroup = document.getElementById('authPhoneGroup');
+    const authPhoneInput = document.getElementById('authPhoneInput');
+    const sendOtpBtn = document.getElementById('sendOtpBtn');
+    const authBackToRequestBtn = document.getElementById('authBackToRequestBtn');
+    const authTargetDisplay = document.getElementById('authTargetDisplay');
+    const otpInputsGrid = document.getElementById('otpInputsGrid');
+    const otpDigitBoxes = document.querySelectorAll('.otp-digit-box');
+    const otpCountdownText = document.getElementById('otpCountdownText');
+    const otpTimerBar = document.getElementById('otpTimerBar');
+    const authResendBtn = document.getElementById('authResendBtn');
+    const verifyOtpBtn = document.getElementById('verifyOtpBtn');
+    const profileLargeAvatar = document.getElementById('profileLargeAvatar');
+    const profileLargeName = document.getElementById('profileLargeName');
+    const profileLargeIdentifier = document.getElementById('profileLargeIdentifier');
+    const profileMetaAuthType = document.getElementById('profileMetaAuthType');
+    const profileMetaCreatedAt = document.getElementById('profileMetaCreatedAt');
+    const profileMetaLastLogin = document.getElementById('profileMetaLastLogin');
+    const authSwitchAccountBtn = document.getElementById('authSwitchAccountBtn');
+    const authSignOutBtn = document.getElementById('authSignOutBtn');
 
     // Sidebar Nav & Badges
     const navItems = document.querySelectorAll('.nav-item[data-view]');
@@ -1440,6 +1489,16 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
+        // Prefill authenticated user info if available
+        if (state.currentUser) {
+            if (bookPatientName && !bookPatientName.value) {
+                bookPatientName.value = state.currentUser.name || '';
+            }
+            if (bookPatientContact && !bookPatientContact.value) {
+                bookPatientContact.value = state.currentUser.phone_number || state.currentUser.email || '';
+            }
+        }
+
         bookDoctorModal.classList.add('show');
     };
 
@@ -1486,9 +1545,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 confirmBookDoctorBtn.disabled = true;
                 confirmBookDoctorBtn.textContent = 'Saving Booking...';
 
+                const reqHeaders = { 'Content-Type': 'application/json' };
+                if (state.authToken) {
+                    reqHeaders['Authorization'] = `Bearer ${state.authToken}`;
+                }
+
                 const res = await fetch('/api/appointments', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: reqHeaders,
                     body: JSON.stringify({
                         visitor_name: name,
                         contact_info: contact,
@@ -1831,8 +1895,457 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // =========================================================================
+    // 7. Authentication & OTP Verification Controller
+    // =========================================================================
+    function showAuthAlert(msg, type = 'error') {
+        if (!authAlert) return;
+        authAlert.className = `auth-alert ${type}`;
+        authAlert.innerHTML = `<span>${type === 'error' ? '⚠️' : (type === 'success' ? '✅' : 'ℹ️')}</span> <span>${escapeHtml(msg)}</span>`;
+        authAlert.style.display = 'flex';
+    }
+
+    function hideAuthAlert() {
+        if (authAlert) {
+            authAlert.style.display = 'none';
+            authAlert.innerHTML = '';
+        }
+    }
+
+    function switchAuthTab(channel) {
+        state.authChannel = channel;
+        hideAuthAlert();
+        if (channel === 'email') {
+            if (authTabEmail) authTabEmail.classList.add('active');
+            if (authTabPhone) authTabPhone.classList.remove('active');
+            if (authEmailGroup) authEmailGroup.style.display = 'block';
+            if (authPhoneGroup) authPhoneGroup.style.display = 'none';
+            if (authEmailInput) authEmailInput.focus();
+        } else {
+            if (authTabPhone) authTabPhone.classList.add('active');
+            if (authTabEmail) authTabEmail.classList.remove('active');
+            if (authEmailGroup) authEmailGroup.style.display = 'none';
+            if (authPhoneGroup) authPhoneGroup.style.display = 'block';
+            if (authPhoneInput) authPhoneInput.focus();
+        }
+    }
+
+    if (authTabEmail) authTabEmail.addEventListener('click', () => switchAuthTab('email'));
+    if (authTabPhone) authTabPhone.addEventListener('click', () => switchAuthTab('phone'));
+
+    function updateUserUI() {
+        if (state.currentUser) {
+            const displayName = state.currentUser.name || (state.currentUser.email ? state.currentUser.email.split('@')[0] : (state.currentUser.phone_number || 'User'));
+            const displayIdentifier = state.currentUser.email || state.currentUser.phone_number || 'Verified Account';
+
+            if (sidebarUserName) sidebarUserName.textContent = displayName;
+            if (sidebarUserRole) sidebarUserRole.textContent = displayIdentifier;
+            if (sidebarUserAvatar) sidebarUserAvatar.textContent = '👨‍⚕️';
+            if (sidebarAuthActionBtn) {
+                sidebarAuthActionBtn.title = 'Account Details / Sign Out';
+                sidebarAuthActionBtn.textContent = '👤';
+            }
+
+            if (topbarUserName) topbarUserName.textContent = displayName;
+            if (topbarUserStatus) topbarUserStatus.textContent = 'Active';
+            if (topbarUserAvatar) topbarUserAvatar.textContent = '👨‍⚕️';
+        } else {
+            if (sidebarUserName) sidebarUserName.textContent = 'Guest Portal';
+            if (sidebarUserRole) sidebarUserRole.textContent = 'Click to Sign In / Register';
+            if (sidebarUserAvatar) sidebarUserAvatar.textContent = '🔒';
+            if (sidebarAuthActionBtn) {
+                sidebarAuthActionBtn.title = 'Sign In / Register';
+                sidebarAuthActionBtn.textContent = '🔐';
+            }
+
+            if (topbarUserName) topbarUserName.textContent = 'Sign In';
+            if (topbarUserStatus) topbarUserStatus.textContent = 'Guest';
+            if (topbarUserAvatar) topbarUserAvatar.textContent = '👤';
+        }
+    }
+
+    function openAuthModal() {
+        hideAuthAlert();
+        if (state.currentUser) {
+            // Show Profile Panel
+            if (authStepRequest) authStepRequest.style.display = 'none';
+            if (authStepVerify) authStepVerify.style.display = 'none';
+            if (authStepProfile) authStepProfile.style.display = 'block';
+
+            const displayName = state.currentUser.name || 'Healthcare User';
+            const displayId = state.currentUser.email || state.currentUser.phone_number || '';
+            if (profileLargeName) profileLargeName.textContent = displayName;
+            if (profileLargeIdentifier) profileLargeIdentifier.textContent = displayId;
+            if (profileMetaAuthType) profileMetaAuthType.textContent = state.currentUser.email ? 'Email OTP Verified' : 'Phone OTP Verified';
+            if (profileMetaCreatedAt) {
+                const dt = state.currentUser.created_at ? new Date(state.currentUser.created_at) : new Date();
+                profileMetaCreatedAt.textContent = dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            }
+            if (profileMetaLastLogin) {
+                const dt = state.currentUser.last_login ? new Date(state.currentUser.last_login) : new Date();
+                profileMetaLastLogin.textContent = dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+            }
+        } else {
+            // Show Request OTP Panel
+            if (authStepRequest) authStepRequest.style.display = 'block';
+            if (authStepVerify) authStepVerify.style.display = 'none';
+            if (authStepProfile) authStepProfile.style.display = 'none';
+
+            // Clear inputs
+            if (authNameInput) authNameInput.value = '';
+            if (authEmailInput) authEmailInput.value = '';
+            if (authPhoneInput) authPhoneInput.value = '';
+        }
+        if (authModal) authModal.classList.add('show');
+    }
+
+    function closeAuthModal() {
+        if (state.otpTimerInterval) {
+            clearInterval(state.otpTimerInterval);
+            state.otpTimerInterval = null;
+        }
+        if (authModal) authModal.classList.remove('show');
+    }
+
+    if (topbarUserPill) topbarUserPill.addEventListener('click', openAuthModal);
+    if (sidebarAuthActionBtn) sidebarAuthActionBtn.addEventListener('click', openAuthModal);
+    if (closeAuthModalBtn) closeAuthModalBtn.addEventListener('click', closeAuthModal);
+
+    // Stop timer on modal click outside
+    if (authModal) {
+        authModal.addEventListener('click', (e) => {
+            if (e.target === authModal) closeAuthModal();
+        });
+    }
+
+    function startOtpCountdown(totalSeconds = 30) {
+        if (state.otpTimerInterval) {
+            clearInterval(state.otpTimerInterval);
+            state.otpTimerInterval = null;
+        }
+
+        state.otpSecondsLeft = totalSeconds;
+        if (authResendBtn) authResendBtn.disabled = true;
+
+        if (otpCountdownText) {
+            otpCountdownText.textContent = `${state.otpSecondsLeft}s`;
+            otpCountdownText.classList.remove('urgent');
+        }
+        if (otpTimerBar) {
+            otpTimerBar.style.width = '100%';
+            otpTimerBar.classList.remove('urgent');
+        }
+
+        state.otpTimerInterval = setInterval(() => {
+            state.otpSecondsLeft--;
+
+            if (state.otpSecondsLeft <= 0) {
+                clearInterval(state.otpTimerInterval);
+                state.otpTimerInterval = null;
+
+                if (otpCountdownText) {
+                    otpCountdownText.textContent = 'Expired';
+                    otpCountdownText.classList.add('urgent');
+                }
+                if (otpTimerBar) {
+                    otpTimerBar.style.width = '0%';
+                    otpTimerBar.classList.add('urgent');
+                }
+                if (authResendBtn) {
+                    authResendBtn.disabled = false;
+                }
+                showAuthAlert('The verification code has expired after 30 seconds. Please click "Resend Code" to receive a fresh code.', 'error');
+            } else {
+                if (otpCountdownText) {
+                    otpCountdownText.textContent = `${state.otpSecondsLeft}s`;
+                }
+                const pct = Math.max(0, (state.otpSecondsLeft / totalSeconds) * 100);
+                if (otpTimerBar) {
+                    otpTimerBar.style.width = `${pct}%`;
+                }
+
+                if (state.otpSecondsLeft <= 10) {
+                    if (otpCountdownText) otpCountdownText.classList.add('urgent');
+                    if (otpTimerBar) otpTimerBar.classList.add('urgent');
+                }
+            }
+        }, 1000);
+    }
+
+    async function handleSendOtp(isResend = false) {
+        hideAuthAlert();
+
+        let identifier = '';
+        if (state.authChannel === 'email') {
+            identifier = (authEmailInput ? authEmailInput.value : '').trim();
+            if (!identifier || !identifier.includes('@') || !identifier.includes('.')) {
+                showAuthAlert('Please enter a valid email address (e.g. user@example.com)', 'error');
+                if (authEmailInput) authEmailInput.focus();
+                return;
+            }
+        } else {
+            identifier = (authPhoneInput ? authPhoneInput.value : '').trim();
+            const cleanDigits = identifier.replace(/[\s\-\(\)\+]/g, '');
+            if (!identifier || cleanDigits.length < 7) {
+                showAuthAlert('Please enter a valid phone number (e.g. +91 9876543210)', 'error');
+                if (authPhoneInput) authPhoneInput.focus();
+                return;
+            }
+        }
+
+        try {
+            if (sendOtpBtn) {
+                sendOtpBtn.disabled = true;
+                sendOtpBtn.innerHTML = '<span class="btn-text">Sending OTP...</span>';
+            }
+            if (authResendBtn) {
+                authResendBtn.disabled = true;
+            }
+
+            const res = await fetch('/api/auth/send-otp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    identifier: identifier,
+                    channel: state.authChannel
+                })
+            });
+
+            const data = await res.json();
+
+            if (!res.ok) {
+                throw new Error(data.detail || 'Failed to dispatch verification code');
+            }
+
+            state.authIdentifier = identifier;
+
+            // Update Step 2 UI
+            if (authTargetDisplay) authTargetDisplay.textContent = identifier;
+            if (authStepRequest) authStepRequest.style.display = 'none';
+            if (authStepVerify) authStepVerify.style.display = 'block';
+
+            // Clear OTP inputs
+            otpDigitBoxes.forEach(box => {
+                box.value = '';
+                box.classList.remove('filled');
+            });
+
+            // Focus first digit box
+            if (otpDigitBoxes[0]) {
+                setTimeout(() => otpDigitBoxes[0].focus(), 100);
+            }
+
+            // Start 30-Second Countdown
+            startOtpCountdown(data.expires_in || 30);
+
+            showToast(`Verification code sent via ${state.authChannel}`, 'success');
+        } catch (err) {
+            showAuthAlert(err.message, 'error');
+        } finally {
+            if (sendOtpBtn) {
+                sendOtpBtn.disabled = false;
+                sendOtpBtn.innerHTML = '<span class="btn-text">Continue & Send OTP</span> <span class="btn-arrow">→</span>';
+            }
+        }
+    }
+
+    if (sendOtpBtn) sendOtpBtn.addEventListener('click', () => handleSendOtp(false));
+    if (authResendBtn) authResendBtn.addEventListener('click', () => handleSendOtp(true));
+
+    if (authBackToRequestBtn) {
+        authBackToRequestBtn.addEventListener('click', () => {
+            if (state.otpTimerInterval) {
+                clearInterval(state.otpTimerInterval);
+                state.otpTimerInterval = null;
+            }
+            hideAuthAlert();
+            if (authStepVerify) authStepVerify.style.display = 'none';
+            if (authStepRequest) authStepRequest.style.display = 'block';
+        });
+    }
+
+    // 6-digit OTP Inputs behavior
+    otpDigitBoxes.forEach((box, idx) => {
+        // Input event (digit typed)
+        box.addEventListener('input', (e) => {
+            const val = box.value.replace(/[^0-9]/g, '');
+            box.value = val ? val[0] : '';
+
+            if (box.value) {
+                box.classList.add('filled');
+                // Move to next input box
+                if (idx < otpDigitBoxes.length - 1) {
+                    otpDigitBoxes[idx + 1].focus();
+                } else {
+                    // Check if all 6 filled -> Auto verify
+                    const fullOtp = Array.from(otpDigitBoxes).map(b => b.value).join('');
+                    if (fullOtp.length === 6) {
+                        handleVerifyOtp();
+                    }
+                }
+            } else {
+                box.classList.remove('filled');
+            }
+        });
+
+        // Keydown (Backspace navigation)
+        box.addEventListener('keydown', (e) => {
+            if (e.key === 'Backspace' && !box.value && idx > 0) {
+                otpDigitBoxes[idx - 1].focus();
+            }
+        });
+
+        // Paste support (pasting full 6 digits)
+        box.addEventListener('paste', (e) => {
+            e.preventDefault();
+            const pasteData = (e.clipboardData || window.clipboardData).getData('text').trim();
+            const digits = pasteData.replace(/[^0-9]/g, '');
+
+            if (digits.length >= 6) {
+                for (let i = 0; i < 6; i++) {
+                    otpDigitBoxes[i].value = digits[i];
+                    otpDigitBoxes[i].classList.add('filled');
+                }
+                otpDigitBoxes[5].focus();
+                handleVerifyOtp();
+            } else {
+                showAuthAlert('Pasted code must be at least 6 digits', 'error');
+            }
+        });
+    });
+
+    async function handleVerifyOtp() {
+        hideAuthAlert();
+
+        const fullOtp = Array.from(otpDigitBoxes).map(b => b.value.trim()).join('');
+        if (fullOtp.length !== 6 || !/^\d{6}$/.test(fullOtp)) {
+            showAuthAlert('Please enter all 6 numeric digits of the verification code.', 'error');
+            return;
+        }
+
+        try {
+            if (verifyOtpBtn) {
+                verifyOtpBtn.disabled = true;
+                verifyOtpBtn.innerHTML = '<span class="btn-text">Verifying...</span>';
+            }
+
+            const userName = (authNameInput ? authNameInput.value.trim() : '') || null;
+
+            const res = await fetch('/api/auth/verify-otp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    identifier: state.authIdentifier,
+                    otp: fullOtp,
+                    name: userName
+                })
+            });
+
+            const data = await res.json();
+
+            if (!res.ok) {
+                throw new Error(data.detail || 'Verification failed. Please check your code.');
+            }
+
+            // Stop timer
+            if (state.otpTimerInterval) {
+                clearInterval(state.otpTimerInterval);
+                state.otpTimerInterval = null;
+            }
+
+            // Save token and user state
+            state.authToken = data.token;
+            localStorage.setItem('jack_auth_token', data.token);
+            state.currentUser = data.user;
+
+            updateUserUI();
+            showToast(`Welcome ${state.currentUser.name || 'User'}! Authentication successful.`, 'success');
+
+            // Close modal after brief success feedback
+            setTimeout(() => {
+                closeAuthModal();
+            }, 600);
+        } catch (err) {
+            showAuthAlert(err.message, 'error');
+            // Clear inputs for re-entry
+            otpDigitBoxes.forEach(b => {
+                b.value = '';
+                b.classList.remove('filled');
+            });
+            if (otpDigitBoxes[0]) otpDigitBoxes[0].focus();
+        } finally {
+            if (verifyOtpBtn) {
+                verifyOtpBtn.disabled = false;
+                verifyOtpBtn.innerHTML = '<span class="btn-text">Verify & Sign In</span> <span class="btn-arrow">✓</span>';
+            }
+        }
+    }
+
+    if (verifyOtpBtn) verifyOtpBtn.addEventListener('click', handleVerifyOtp);
+
+    async function handleLogout() {
+        try {
+            await fetch('/api/auth/logout', { method: 'POST' });
+        } catch (e) { }
+
+        if (state.otpTimerInterval) {
+            clearInterval(state.otpTimerInterval);
+            state.otpTimerInterval = null;
+        }
+
+        localStorage.removeItem('jack_auth_token');
+        state.authToken = '';
+        state.currentUser = null;
+
+        updateUserUI();
+        showToast('Signed out successfully.', 'info');
+
+        // Reset to Step 1
+        if (authStepProfile) authStepProfile.style.display = 'none';
+        if (authStepVerify) authStepVerify.style.display = 'none';
+        if (authStepRequest) authStepRequest.style.display = 'block';
+    }
+
+    if (authSignOutBtn) authSignOutBtn.addEventListener('click', handleLogout);
+    if (authSwitchAccountBtn) {
+        authSwitchAccountBtn.addEventListener('click', () => {
+            handleLogout();
+        });
+    }
+
+    async function checkAuthState() {
+        if (!state.authToken) {
+            updateUserUI();
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/auth/me', {
+                headers: {
+                    'Authorization': `Bearer ${state.authToken}`
+                }
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                state.currentUser = data.user;
+                updateUserUI();
+            } else {
+                // Token expired or invalid
+                localStorage.removeItem('jack_auth_token');
+                state.authToken = '';
+                state.currentUser = null;
+                updateUserUI();
+            }
+        } catch (err) {
+            console.warn('Auth check skipped (offline or server starting):', err);
+            updateUserUI();
+        }
+    }
+
+    // =========================================================================
     // Initial Application Boot
     // =========================================================================
+    checkAuthState();
     loadDashboardStats();
     loadAppointments();
     loadDoctors();
