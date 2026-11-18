@@ -415,5 +415,93 @@ class TestReceptionistBackend(unittest.TestCase):
         self.assertEqual(saved["status"], "Confirmed")
         self.assertEqual(saved["time_slot"], "04:00 PM")
 
+    def test_16_dashboard_stats_and_patients_endpoints(self):
+        """Test the live aggregated dashboard metrics and patients directory endpoints."""
+        # 1. /api/stats
+        res_stats = self.client.get("/api/stats")
+        self.assertEqual(res_stats.status_code, 200)
+        stats = res_stats.json()
+        self.assertIn("total_appointments", stats)
+        self.assertIn("available_doctors", stats)
+        self.assertIn("registered_patients", stats)
+        self.assertIn("pending_appointments", stats)
+        self.assertTrue(stats["total_appointments"] >= 0)
+        self.assertTrue(stats["total_doctors"] >= 10)
+
+        # 2. /api/patients
+        res_patients = self.client.get("/api/patients")
+        self.assertEqual(res_patients.status_code, 200)
+        patients = res_patients.json()
+        self.assertIsInstance(patients, list)
+        if patients:
+            p = patients[0]
+            self.assertIn("name", p)
+            self.assertIn("contact_info", p)
+            self.assertIn("total_appointments", p)
+
+    def test_17_admin_doctor_crud_and_appointment_status_update(self):
+        """Test admin doctor registration, deletion, and appointment status patch."""
+        # 1. Register new doctor
+        new_doc_data = {
+            "name": "Dr. Test Specialist",
+            "specialization": "Radiology",
+            "department": "Imaging Centre",
+            "qualification": "MBBS, MD",
+            "experience_years": 10,
+            "consultation_fee": "₹1000",
+            "available_days": "Mon, Wed",
+            "available_slots": "10:00 AM, 11:00 AM",
+            "rating": 4.9,
+            "status": "Available",
+            "phone_extension": "301",
+            "email": "test.specialist@hrenterprises.com",
+            "bio": "Expert in diagnostic radiology",
+            "avatar_emoji": "🩺"
+        }
+        res_add = self.client.post("/api/doctors", json=new_doc_data)
+        self.assertEqual(res_add.status_code, 200)
+        add_result = res_add.json()
+        doc_id = add_result["id"]
+
+        # Verify added doctor is queryable
+        res_get = self.client.get(f"/api/doctors/{doc_id}")
+        self.assertEqual(res_get.status_code, 200)
+        self.assertEqual(res_get.json()["name"], "Dr. Test Specialist")
+
+        # 2. Delete test doctor
+        res_del = self.client.delete(f"/api/doctors/{doc_id}")
+        self.assertEqual(res_del.status_code, 200)
+
+        # 3. Patch appointment status
+        # Book a temporary appointment
+        tomorrow = (date.today() + timedelta(days=2)).isoformat()
+        res_book = self.client.post("/api/appointments", json={
+            "visitor_name": "Tony Stark",
+            "contact_info": "tony@stark.com",
+            "staff_or_department": "Dr. Arun Prakash Sharma",
+            "date": tomorrow,
+            "time_slot": "03:00 PM",
+            "purpose": "Heart checkup"
+        })
+        self.assertEqual(res_book.status_code, 200)
+        appt_id = res_book.json()["booking_id"]
+
+        # Patch to Completed
+        res_patch = self.client.patch(f"/api/appointments/{appt_id}/status", json={"status": "Completed"})
+        self.assertEqual(res_patch.status_code, 200)
+
+        # Clean up
+        async def clean():
+            db = await get_db()
+            try:
+                await db.execute("DELETE FROM appointments WHERE id = ?", (appt_id,))
+                await db.commit()
+            finally:
+                await db.close()
+        asyncio.run(clean())
+
+if __name__ == "__main__":
+    unittest.main()
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,15 +1,21 @@
 /**
- * Corporate AI Receptionist - Main Application Controller
- * Manages WebSocket real-time live streaming, Web Audio pipeline, visualizer,
- * appointments, caller message inbox, staff directory, and settings.
+ * HR Enterprises Healthcare SaaS & AI Voice Receptionist
+ * Main Frontend Application Controller
+ * Handles View Routing, Real-Time Statistics, Appointment Scheduling,
+ * Doctors Directory, Patient Registry, Floating Jack AI Assistant, and Web Audio.
  */
 
 document.addEventListener('DOMContentLoaded', () => {
-    // State
+    // =========================================================================
+    // Application State
+    // =========================================================================
     const state = {
+        currentView: 'dashboardView',
         isCallActive: false,
         isMuted: false,
-        activeTab: 'appointmentsTab',
+        isJackSpeaking: false,
+        isAssistantOpen: false,
+        isSpeechRecognitionMode: false,
         apiKey: localStorage.getItem('gemini_api_key') || '',
         voice: localStorage.getItem('receptionist_voice') || 'Aoede',
         customWsUrl: localStorage.getItem('custom_ws_url') || '',
@@ -17,18 +23,113 @@ document.addEventListener('DOMContentLoaded', () => {
         audioRecorder: null,
         audioPlayer: null,
         speechRecognition: null,
-        isSpeechRecognitionMode: false,
-        isJackSpeaking: false,
         visualizerAnimationId: null,
         currentVolume: 0,
         companyInfo: null,
-        chatHistory: []
+        chatHistory: [],
+        allAppointments: [],
+        allDoctors: [],
+        allPatients: [],
+        allMessages: [],
+        currentApptFilter: 'all',
+        currentMsgFilter: 'all',
+        selectedBookingDoctor: null
     };
 
-    // DOM Elements
+    // =========================================================================
+    // DOM Elements Cache
+    // =========================================================================
+    // Topbar & Clock
     const systemClock = document.getElementById('systemClock');
+    const currentDateDisplay = document.getElementById('currentDateDisplay');
+    const currentPageTitle = document.getElementById('currentPageTitle');
     const connectionPill = document.getElementById('connectionPill');
     const connectionText = document.getElementById('connectionText');
+    const mobileMenuToggle = document.getElementById('mobileMenuToggle');
+    const appSidebar = document.getElementById('appSidebar');
+    const sidebarBackdrop = document.getElementById('sidebarBackdrop');
+    const globalSearchInput = document.getElementById('globalSearchInput');
+    const notificationsBtn = document.getElementById('notificationsBtn');
+    const notificationsDropdown = document.getElementById('notificationsDropdown');
+    const notifBadge = document.getElementById('notifBadge');
+    const notifDropdownCount = document.getElementById('notifDropdownCount');
+    const notifDropdownList = document.getElementById('notifDropdownList');
+    const headerSettingsBtn = document.getElementById('headerSettingsBtn');
+    const openSettingsBtn = document.getElementById('openSettingsBtn');
+
+    // Sidebar Nav & Badges
+    const navItems = document.querySelectorAll('.nav-item[data-view]');
+    const viewPanels = document.querySelectorAll('.view-panel');
+    const sidebarApptBadge = document.getElementById('sidebarApptBadge');
+    const sidebarDoctorBadge = document.getElementById('sidebarDoctorBadge');
+    const sidebarPatientBadge = document.getElementById('sidebarPatientBadge');
+    const sidebarMsgBadge = document.getElementById('sidebarMsgBadge');
+    const quickTalkBtn = document.getElementById('quickTalkBtn');
+    const quickTriggerJackBtn = document.getElementById('quickTriggerJackBtn');
+
+    // Dashboard Stat Cards & Mini Previews
+    const statTotalAppts = document.getElementById('statTotalAppts');
+    const statAvailableDocs = document.getElementById('statAvailableDocs');
+    const statTotalPatients = document.getElementById('statTotalPatients');
+    const statPendingAppts = document.getElementById('statPendingAppts');
+    const statTotalDocsSub = document.getElementById('statTotalDocsSub');
+    const dashboardApptsTbody = document.getElementById('dashboardApptsTbody');
+    const dashboardDoctorsMini = document.getElementById('dashboardDoctorsMini');
+    const dashboardMessagesMini = document.getElementById('dashboardMessagesMini');
+    const refreshDashboardBtn = document.getElementById('refreshDashboardBtn');
+    const quickNewApptBtn = document.getElementById('quickNewApptBtn');
+    const quickNewDocBtn = document.getElementById('quickNewDocBtn');
+    const viewAllApptsLink = document.getElementById('viewAllApptsLink');
+    const viewAllDoctorsLink = document.getElementById('viewAllDoctorsLink');
+    const viewAllMessagesLink = document.getElementById('viewAllMessagesLink');
+
+    // Appointments Elements
+    const apptFilterGroup = document.getElementById('apptFilterGroup');
+    const apptSearchInput = document.getElementById('apptSearchInput');
+    const appointmentsList = document.getElementById('appointmentsList');
+    const openBookApptModalBtn = document.getElementById('openBookApptModalBtn');
+    const refreshApptsBtn = document.getElementById('refreshApptsBtn');
+    const countFilterAll = document.getElementById('countFilterAll');
+    const countFilterToday = document.getElementById('countFilterToday');
+    const countFilterUpcoming = document.getElementById('countFilterUpcoming');
+    const countFilterCompleted = document.getElementById('countFilterCompleted');
+    const countFilterCancelled = document.getElementById('countFilterCancelled');
+
+    // Doctors Elements
+    const doctorsList = document.getElementById('doctorsList');
+    const doctorSearchInput = document.getElementById('doctorSearchInput');
+    const doctorSpecFilter = document.getElementById('doctorSpecFilter');
+    const adminAddDoctorBtn = document.getElementById('adminAddDoctorBtn');
+    const refreshDoctorsBtn = document.getElementById('refreshDoctorsBtn');
+
+    // Patients Elements
+    const patientsList = document.getElementById('patientsList');
+    const patientSearchInput = document.getElementById('patientSearchInput');
+    const patientNewApptBtn = document.getElementById('patientNewApptBtn');
+    const refreshPatientsBtn = document.getElementById('refreshPatientsBtn');
+
+    // Messages Elements
+    const messagesList = document.getElementById('messagesList');
+    const msgFilterGroup = document.getElementById('msgFilterGroup');
+    const refreshMsgsBtn = document.getElementById('refreshMsgsBtn');
+    const msgFilterAllCount = document.getElementById('msgFilterAllCount');
+    const msgFilterUnreadCount = document.getElementById('msgFilterUnreadCount');
+    const msgFilterUrgentCount = document.getElementById('msgFilterUrgentCount');
+
+    // Directory, FAQ, Logs
+    const directoryList = document.getElementById('directoryList');
+    const directorySearchInput = document.getElementById('directorySearchInput');
+    const refreshDirectoryBtn = document.getElementById('refreshDirectoryBtn');
+    const faqList = document.getElementById('faqList');
+    const logsList = document.getElementById('logsList');
+    const refreshLogsBtn = document.getElementById('refreshLogsBtn');
+
+    // Floating Jack AI Assistant
+    const jackFloatingContainer = document.getElementById('jackFloatingContainer');
+    const jackFloatingBtn = document.getElementById('jackFloatingBtn');
+    const jackAssistantPopup = document.getElementById('jackAssistantPopup');
+    const closeAssistantBtn = document.getElementById('closeAssistantBtn');
+    const minimizeAssistantBtn = document.getElementById('minimizeAssistantBtn');
     const liveBadge = document.getElementById('liveBadge');
     const badgeText = document.getElementById('badgeText');
     const startCallBtn = document.getElementById('startCallBtn');
@@ -41,29 +142,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const transcriptFeed = document.getElementById('transcriptFeed');
     const chatInput = document.getElementById('chatInput');
     const sendChatBtn = document.getElementById('sendChatBtn');
+    const micVoiceBtn = document.getElementById('micVoiceBtn');
     const waveformCanvas = document.getElementById('waveformCanvas');
-    const consoleHero = document.getElementById('consoleHero');
-    const avatarContainer = document.getElementById('avatarContainer');
+    const promptPills = document.querySelectorAll('.prompt-pill');
 
-    // Management Suite Elements
-    const tabBtns = document.querySelectorAll('.tab-btn');
-    const tabPanes = document.querySelectorAll('.tab-pane');
-    const appointmentsList = document.getElementById('appointmentsList');
-    const messagesList = document.getElementById('messagesList');
-    const directoryList = document.getElementById('directoryList');
-    const faqList = document.getElementById('faqList');
-    const logsList = document.getElementById('logsList');
-    const apptCountBadge = document.getElementById('apptCountBadge');
-    const msgCountBadge = document.getElementById('msgCountBadge');
-    const directorySearchInput = document.getElementById('directorySearchInput');
-
-    // Doctors Elements
-    const doctorsList = document.getElementById('doctorsList');
-    const doctorCountBadge = document.getElementById('doctorCountBadge');
-    const doctorSearchInput = document.getElementById('doctorSearchInput');
-    const doctorSpecFilter = document.getElementById('doctorSpecFilter');
-
-    // Doctor Booking Modal Elements
+    // Modals
     const bookDoctorModal = document.getElementById('bookDoctorModal');
     const closeBookDoctorBtn = document.getElementById('closeBookDoctorBtn');
     const cancelBookDoctorBtn = document.getElementById('cancelBookDoctorBtn');
@@ -74,11 +157,29 @@ document.addEventListener('DOMContentLoaded', () => {
     const bookApptDate = document.getElementById('bookApptDate');
     const bookApptSlot = document.getElementById('bookApptSlot');
     const bookApptPurpose = document.getElementById('bookApptPurpose');
-    let selectedBookingDoctor = null;
 
-    // Settings Modal Elements
+    const addDoctorModal = document.getElementById('addDoctorModal');
+    const closeAddDoctorBtn = document.getElementById('closeAddDoctorBtn');
+    const cancelAddDoctorBtn = document.getElementById('cancelAddDoctorBtn');
+    const confirmAddDoctorBtn = document.getElementById('confirmAddDoctorBtn');
+    const newDocName = document.getElementById('newDocName');
+    const newDocSpec = document.getElementById('newDocSpec');
+    const newDocDept = document.getElementById('newDocDept');
+    const newDocQual = document.getElementById('newDocQual');
+    const newDocExp = document.getElementById('newDocExp');
+    const newDocFee = document.getElementById('newDocFee');
+    const newDocDays = document.getElementById('newDocDays');
+    const newDocSlots = document.getElementById('newDocSlots');
+    const newDocEmail = document.getElementById('newDocEmail');
+    const newDocExt = document.getElementById('newDocExt');
+    const newDocBio = document.getElementById('newDocBio');
+
+    const apptDetailsModal = document.getElementById('apptDetailsModal');
+    const closeApptDetailsBtn = document.getElementById('closeApptDetailsBtn');
+    const dismissApptDetailsBtn = document.getElementById('dismissApptDetailsBtn');
+    const apptDetailsContent = document.getElementById('apptDetailsContent');
+
     const settingsModal = document.getElementById('settingsModal');
-    const openSettingsBtn = document.getElementById('openSettingsBtn');
     const closeSettingsBtn = document.getElementById('closeSettingsBtn');
     const cancelSettingsBtn = document.getElementById('cancelSettingsBtn');
     const saveSettingsBtn = document.getElementById('saveSettingsBtn');
@@ -86,20 +187,119 @@ document.addEventListener('DOMContentLoaded', () => {
     const voiceSelect = document.getElementById('voiceSelect');
     const customWsUrlInput = document.getElementById('customWsUrlInput');
 
-    // Initialize System Clock
+    const toastContainer = document.getElementById('toastContainer');
+
+    // =========================================================================
+    // System Clock & Live Date
+    // =========================================================================
     function updateClock() {
         const now = new Date();
-        systemClock.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' EST';
+        if (systemClock) {
+            systemClock.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' EST';
+        }
+        if (currentDateDisplay) {
+            currentDateDisplay.textContent = now.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+        }
     }
     setInterval(updateClock, 1000);
     updateClock();
 
+    // Default book appointment date to tomorrow
+    if (bookApptDate) {
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        bookApptDate.value = tomorrow.toISOString().split('T')[0];
+    }
+
     // =========================================================================
-    // Visualizer Waveform Canvas
+    // View Switching & Sidebar Navigation
     // =========================================================================
-    const canvasCtx = waveformCanvas.getContext('2d');
+    const viewTitles = {
+        dashboardView: 'Dashboard Overview',
+        appointmentsView: 'Appointment Management',
+        doctorsView: 'Doctors & Specialists Directory',
+        patientsView: 'Registered Patient Records',
+        messagesView: 'Caller Inquiries & Voicemails',
+        directoryView: 'Corporate Staff Directory',
+        faqView: 'Office Policy & Facility Info',
+        logsView: 'Reception Call History & Logs'
+    };
+
+    function switchView(targetViewId) {
+        state.currentView = targetViewId;
+
+        // Update nav items active state
+        navItems.forEach(item => {
+            if (item.getAttribute('data-view') === targetViewId) {
+                item.classList.add('active');
+            } else {
+                item.classList.remove('active');
+            }
+        });
+
+        // Show target view panel
+        viewPanels.forEach(panel => {
+            if (panel.id === targetViewId) {
+                panel.classList.add('active');
+            } else {
+                panel.classList.remove('active');
+            }
+        });
+
+        // Update Page Title
+        if (currentPageTitle && viewTitles[targetViewId]) {
+            currentPageTitle.textContent = viewTitles[targetViewId];
+        }
+
+        // Close mobile sidebar if open
+        if (appSidebar) appSidebar.classList.remove('open');
+        if (sidebarBackdrop) sidebarBackdrop.classList.remove('show');
+
+        // Trigger view-specific loads
+        if (targetViewId === 'dashboardView') loadDashboardStats();
+        else if (targetViewId === 'appointmentsView') loadAppointments();
+        else if (targetViewId === 'doctorsView') loadDoctors();
+        else if (targetViewId === 'patientsView') loadPatients();
+        else if (targetViewId === 'messagesView') loadMessages();
+        else if (targetViewId === 'directoryView') loadDirectory();
+        else if (targetViewId === 'faqView') loadCompanyDetails();
+        else if (targetViewId === 'logsView') loadCallLogs();
+    }
+
+    // Attach click handlers to sidebar nav items
+    navItems.forEach(item => {
+        item.addEventListener('click', () => {
+            const viewId = item.getAttribute('data-view');
+            switchView(viewId);
+        });
+    });
+
+    // Quick links from Dashboard
+    if (viewAllApptsLink) viewAllApptsLink.addEventListener('click', () => switchView('appointmentsView'));
+    if (viewAllDoctorsLink) viewAllDoctorsLink.addEventListener('click', () => switchView('doctorsView'));
+    if (viewAllMessagesLink) viewAllMessagesLink.addEventListener('click', () => switchView('messagesView'));
+
+    // Mobile Menu Toggle
+    if (mobileMenuToggle) {
+        mobileMenuToggle.addEventListener('click', () => {
+            appSidebar.classList.toggle('open');
+            sidebarBackdrop.classList.toggle('show');
+        });
+    }
+    if (sidebarBackdrop) {
+        sidebarBackdrop.addEventListener('click', () => {
+            appSidebar.classList.remove('open');
+            sidebarBackdrop.classList.remove('show');
+        });
+    }
+
+    // =========================================================================
+    // Waveform Visualizer Canvas
+    // =========================================================================
+    const canvasCtx = waveformCanvas ? waveformCanvas.getContext('2d') : null;
 
     function drawWaveform() {
+        if (!waveformCanvas || !canvasCtx) return;
         state.visualizerAnimationId = requestAnimationFrame(drawWaveform);
 
         const width = waveformCanvas.width;
@@ -111,547 +311,128 @@ document.addEventListener('DOMContentLoaded', () => {
             freqData = state.audioPlayer.getFrequencyData();
         }
 
-        const barCount = 42;
-        const barWidth = 6;
+        const barCount = 34;
+        const barWidth = 4;
         const gap = (width - (barCount * barWidth)) / (barCount - 1);
 
         for (let i = 0; i < barCount; i++) {
-            let barHeight = 4;
+            let barHeight = 3;
 
             if (state.isCallActive) {
                 if (state.audioPlayer && state.audioPlayer.isPlaying && freqData.length > 0) {
                     const freqIdx = Math.floor((i / barCount) * freqData.length);
                     const val = freqData[freqIdx] / 255.0;
-                    barHeight = Math.max(4, val * (height * 0.9));
+                    barHeight = Math.max(3, val * (height * 0.9));
                 } else if (state.isJackSpeaking) {
-                    const time = Date.now() * 0.007;
-                    const wave = Math.sin(time + i * 0.35) * (height * 0.42) + Math.cos(time * 0.4 + i * 0.2) * (height * 0.25);
-                    barHeight = Math.max(6, Math.abs(wave));
+                    const time = Date.now() * 0.008;
+                    const wave = Math.sin(time + i * 0.4) * (height * 0.45) + Math.cos(time * 0.3 + i * 0.2) * (height * 0.25);
+                    barHeight = Math.max(4, Math.abs(wave));
                 } else if (state.currentVolume > 0.01) {
-                    // User mic volume fluctuation
                     const wave = Math.sin((i / barCount) * Math.PI) * state.currentVolume * (height * 0.85);
-                    barHeight = Math.max(4, wave);
+                    barHeight = Math.max(3, wave);
                 } else {
-                    // Gentle idle pulse
-                    const time = Date.now() * 0.003;
-                    barHeight = 4 + Math.sin(time + i * 0.3) * 3;
+                    const time = Date.now() * 0.004;
+                    barHeight = 3 + Math.sin(time + i * 0.35) * 2.5;
                 }
             }
 
             const x = i * (barWidth + gap);
             const y = (height - barHeight) / 2;
 
-            // Gradient fill
             const grad = canvasCtx.createLinearGradient(x, y, x, y + barHeight);
             if ((state.audioPlayer && state.audioPlayer.isPlaying) || state.isJackSpeaking) {
                 grad.addColorStop(0, '#00f0ff');
-                grad.addColorStop(1, '#6366f1');
+                grad.addColorStop(1, '#3b82f6');
             } else if (state.currentVolume > 0.05) {
                 grad.addColorStop(0, '#38bdf8');
                 grad.addColorStop(1, '#0284c7');
             } else {
-                grad.addColorStop(0, 'rgba(255, 255, 255, 0.2)');
-                grad.addColorStop(1, 'rgba(255, 255, 255, 0.05)');
+                grad.addColorStop(0, 'rgba(0, 240, 255, 0.4)');
+                grad.addColorStop(1, 'rgba(255, 255, 255, 0.1)');
             }
 
             canvasCtx.fillStyle = grad;
             canvasCtx.beginPath();
-            canvasCtx.roundRect(x, y, barWidth, barHeight, 3);
+            if (canvasCtx.roundRect) {
+                canvasCtx.roundRect(x, y, barWidth, barHeight, 2);
+            } else {
+                canvasCtx.rect(x, y, barWidth, barHeight);
+            }
             canvasCtx.fill();
         }
     }
     drawWaveform();
 
     // =========================================================================
-    // Live Voice Call Management (WebSocket & Audio Engine)
+    // Floating Jack AI Assistant Window Management
     // =========================================================================
-
-    async function startVoiceCall() {
-        if (state.isCallActive) return;
-
-        // Check if API key is provided
-        if (!state.apiKey) {
-            // Check if server already has GEMINI_API_KEY
-            const cfg = await fetch('/api/config').then(r => r.json()).catch(() => ({}));
-            if (!cfg.has_api_key) {
-                showToast('Jack running in Voice Assistant mode. (Add Gemini API key in Settings for full AI streaming)', 'info');
-                startBrowserVoiceSession();
-                return;
-            }
-        }
-
-        updateLiveBadge('processing', 'Connecting...');
-        connectionText.textContent = 'Connecting...';
-
-        const isVercelHost = window.location.hostname.endsWith('vercel.app') || window.location.hostname.includes('vercel');
-
-        // If on Vercel without an external WebSocket backend URL, use browser voice assistant directly
-        if (isVercelHost && !state.customWsUrl) {
-            startBrowserVoiceSession();
-            return;
-        }
-
-        // If no Gemini API key is configured and no custom WebSocket URL, use Browser Voice Assistant directly
-        if (!state.apiKey && !state.customWsUrl) {
-            startBrowserVoiceSession();
-            return;
-        }
-
-        try {
-            // 1. Initialize Audio Player for 24kHz Gemini output
-            state.audioPlayer = new window.PcmAudioPlayer(24000);
-            state.audioPlayer.init();
-            state.audioPlayer.onPlaybackStateChange = (isPlaying) => {
-                if (isPlaying) {
-                    updateLiveBadge('speaking', 'Jack Speaking');
-                } else if (state.isCallActive) {
-                    updateLiveBadge('listening', 'Listening...');
-                }
-            };
-
-            // 2. Initialize Microphone Recorder for 16kHz input
-            state.audioRecorder = new window.PcmAudioRecorder({
-                targetSampleRate: 16000,
-                onAudioChunk: (base64Pcm) => {
-                    if (state.ws && state.ws.readyState === WebSocket.OPEN) {
-                        state.ws.send(JSON.stringify({
-                            type: 'audio',
-                            data: base64Pcm
-                        }));
-                    }
-                },
-                onVolumeChange: (vol) => {
-                    state.currentVolume = vol;
-                }
-            });
-            await state.audioRecorder.start();
-
-            // 3. Connect to WebSocket
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const queryParams = new URLSearchParams();
-            if (state.apiKey) queryParams.set('api_key', state.apiKey);
-            if (state.voice) queryParams.set('voice', state.voice);
-
-            let wsUrl = state.customWsUrl;
-            if (!wsUrl) {
-                wsUrl = `${protocol}//${window.location.host}/ws/live?${queryParams.toString()}`;
-            } else {
-                wsUrl += (wsUrl.includes('?') ? '&' : '?') + queryParams.toString();
-            }
-
-            let connectionOpened = false;
-            state.ws = new WebSocket(wsUrl);
-
-            state.ws.onopen = () => {
-                connectionOpened = true;
-                state.isCallActive = true;
-                updateCallUiState(true);
-                connectionPill.classList.add('live-active');
-                connectionText.textContent = 'Live Audio Call';
-                appendTranscriptMessage('system', 'Connected to front desk. Jack is listening...');
-            };
-
-            state.ws.onmessage = (event) => {
-                handleWebSocketMessage(event.data);
-            };
-
-            state.ws.onerror = (err) => {
-                console.warn('WebSocket connection error:', err);
-                if (!connectionOpened) {
-                    // Fall back gracefully to browser voice assistant
-                    showToast('WebSocket unavailable. Switching to Voice Assistant mode...', 'info');
-                    if (state.audioRecorder) {
-                        state.audioRecorder.stop();
-                        state.audioRecorder = null;
-                    }
-                    if (state.audioPlayer) {
-                        state.audioPlayer.close();
-                        state.audioPlayer = null;
-                    }
-                    startBrowserVoiceSession();
-                } else {
-                    showToast('WebSocket connection error', 'error');
-                }
-            };
-
-            state.ws.onclose = () => {
-                if (connectionOpened) {
-                    endVoiceCall();
-                }
-            };
-
-        } catch (err) {
-            console.error('Failed to start call:', err);
-            startBrowserVoiceSession();
-        }
-    }
-
-    function speakJack(text, onComplete) {
-        if (!('speechSynthesis' in window)) {
-            if (onComplete) onComplete();
-            return;
-        }
-        try {
-            window.speechSynthesis.cancel();
-            window.speechSynthesis.resume();
-        } catch (e) { }
-
-        // Clean markdown symbols for smooth, natural voice speech synthesis
-        const spokenText = (text || '')
-            .replace(/\*\*(.*?)\*\*/g, '$1')
-            .replace(/\*(.*?)\*/g, '$1')
-            .replace(/^#+\s+/gm, '')
-            .replace(/•\s*/g, '')
-            .replace(/\[(.*?)\]\(.*?\)/g, '$1')
-            .trim();
-
-        if (!spokenText) {
-            if (onComplete) onComplete();
-            return;
-        }
-
-        const utter = new SpeechSynthesisUtterance(spokenText);
-        utter.rate = 1.0;
-        utter.pitch = 1.0;
-
-        const voices = window.speechSynthesis.getVoices();
-        const preferred = voices.find(v => (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Samantha') || v.name.includes('Zira') || v.name.includes('Jenny') || v.name.includes('David')) && v.lang.startsWith('en'));
-        if (preferred) utter.voice = preferred;
-
-        utter.onstart = () => {
-            state.isJackSpeaking = true;
-            updateLiveBadge('speaking', 'Jack Speaking');
-        };
-        utter.onend = () => {
-            state.isJackSpeaking = false;
-            if (state.isCallActive) updateLiveBadge('listening', 'Listening...');
-            if (onComplete) onComplete();
-        };
-        utter.onerror = () => {
-            state.isJackSpeaking = false;
-            if (state.isCallActive) updateLiveBadge('listening', 'Listening...');
-            if (onComplete) onComplete();
-        };
-
-        window.speechSynthesis.speak(utter);
-    }
-
-    async function startBrowserVoiceSession() {
-        const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRec) {
-            showToast('Voice mode requires Google Chrome, Edge, or Safari with Web Speech support.', 'error');
-            updateCallUiState(false);
-            updateLiveBadge('idle', 'Standby');
-            connectionText.textContent = 'Ready';
-            return;
-        }
-
-        state.isCallActive = true;
-        state.isSpeechRecognitionMode = true;
-        updateCallUiState(true);
-        connectionPill.classList.add('live-active');
-        connectionText.textContent = 'Voice Assistant';
-        updateLiveBadge('listening', 'Listening...');
-        appendTranscriptMessage('system', 'Connected to Jack via Voice Assistant mode. Speak into your microphone!');
-
-        // Initial Greeting
-        if (state.chatHistory.length === 0) {
-            const greetingText = "Good day! Welcome to HR Enterprises. My name is Jack, your AI Voice Receptionist. How may I assist you with your appointment or inquiry today?";
-            state.chatHistory.push({ role: 'model', text: greetingText });
-            appendTranscriptMessage('model', greetingText);
-            speakJack(greetingText);
-        }
-
-        const recognition = new SpeechRec();
-        recognition.continuous = true;
-        recognition.interimResults = false;
-        recognition.lang = 'en-US';
-
-        // Barge-in / Interruption handling: stop Jack if caller speaks
-        recognition.onspeechstart = () => {
-            if (state.isJackSpeaking) {
-                try { window.speechSynthesis.cancel(); } catch (e) { }
-                state.isJackSpeaking = false;
-                updateLiveBadge('listening', 'Listening...');
-            }
-        };
-
-        recognition.onresult = async (event) => {
-            const last = event.results.length - 1;
-            const transcript = event.results[last][0].transcript.trim();
-            if (!transcript || state.isMuted) return;
-
-            // Stop Jack if he was speaking when user spoken input arrived
-            if (state.isJackSpeaking) {
-                try { window.speechSynthesis.cancel(); } catch (e) { }
-                state.isJackSpeaking = false;
-            }
-
-            appendTranscriptMessage('user', transcript);
-            updateLiveBadge('processing', 'Jack Thinking...');
-
-            // Track conversation history
-            state.chatHistory.push({ role: 'user', text: transcript });
-
-            try {
-                const res = await fetch('/api/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        message: transcript,
-                        history: state.chatHistory,
-                        api_key: state.apiKey
-                    })
-                });
-
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.detail || 'Chat request failed');
-
-                state.chatHistory.push({ role: 'model', text: data.reply });
-                appendTranscriptMessage('model', data.reply);
-                speakJack(data.reply);
-
-                if (data.actions && data.actions.length > 0) {
-                    loadAppointments();
-                    loadMessages();
-                    loadDoctors();
-                }
-            } catch (err) {
-                console.error('Speech interaction error:', err);
-                showToast(err.message, 'error');
-                updateLiveBadge('listening', 'Listening...');
-            }
-        };
-
-        recognition.onerror = (e) => {
-            if (e.error !== 'no-speech') {
-                console.warn('Speech recognition status:', e.error);
-            }
-        };
-
-        recognition.onend = () => {
-            if (state.isCallActive && state.isSpeechRecognitionMode) {
-                try { recognition.start(); } catch (e) { }
-            }
-        };
-
-        try {
-            recognition.start();
-            state.speechRecognition = recognition;
-        } catch (e) {
-            console.error('Could not start SpeechRecognition:', e);
-            showToast('Microphone access denied', 'error');
-            endVoiceCall();
-        }
-    }
-
-    function handleWebSocketMessage(rawMsg) {
-        try {
-            const msg = JSON.parse(rawMsg);
-
-            switch (msg.type) {
-                case 'status':
-                    if (msg.status === 'connected') {
-                        updateLiveBadge('listening', 'Listening...');
-                    }
-                    break;
-
-                case 'audio':
-                    // Play 24kHz PCM chunk
-                    if (state.audioPlayer && msg.data) {
-                        state.audioPlayer.playChunk(msg.data);
-                    }
-                    break;
-
-                case 'transcript':
-                    appendTranscriptMessage(msg.role === 'model' ? 'model' : 'user', msg.text);
-                    break;
-
-                case 'tool_executing':
-                    showToolExecution(msg.name, msg.args);
-                    break;
-
-                case 'tool_result':
-                    hideToolExecution(msg.name, msg.result);
-                    // Refresh tabs when data-modifying tools execute
-                    if (['book_appointment', 'cancel_appointment'].includes(msg.name)) {
-                        loadAppointments();
-                    } else if (msg.name === 'leave_message') {
-                        loadMessages();
-                    }
-                    break;
-
-                case 'interrupted':
-                    // Stop audio playback immediately on user interruption
-                    if (state.audioPlayer) {
-                        state.audioPlayer.interrupt();
-                    }
-                    updateLiveBadge('listening', 'Listening...');
-                    break;
-
-                case 'error':
-                    showToast(msg.message, 'error');
-                    appendTranscriptMessage('system', `Notice: ${msg.message}`);
-                    if (!state.isSpeechRecognitionMode && msg.message && (msg.message.includes('API Key') || msg.message.includes('missing') || msg.message.includes('403') || msg.message.includes('quota'))) {
-                        showToast('Switching to Voice Assistant mode...', 'info');
-                        if (state.ws) {
-                            state.ws.onclose = null;
-                            state.ws.close();
-                            state.ws = null;
-                        }
-                        if (state.audioRecorder) {
-                            state.audioRecorder.stop();
-                            state.audioRecorder = null;
-                        }
-                        if (state.audioPlayer) {
-                            state.audioPlayer.close();
-                            state.audioPlayer = null;
-                        }
-                        startBrowserVoiceSession();
-                    }
-                    break;
-            }
-        } catch (e) {
-            console.error('Error handling WebSocket message:', e);
-        }
-    }
-
-    function endVoiceCall() {
-        if (!state.isCallActive && !state.ws && !state.speechRecognition) return;
-
-        state.isCallActive = false;
-        state.isSpeechRecognitionMode = false;
-        state.currentVolume = 0;
-
-        if (state.speechRecognition) {
-            try {
-                state.speechRecognition.onend = null;
-                state.speechRecognition.stop();
-            } catch (e) { }
-            state.speechRecognition = null;
-        }
-
-        if ('speechSynthesis' in window) {
-            window.speechSynthesis.cancel();
-        }
-
-        if (state.ws) {
-            if (state.ws.readyState === WebSocket.OPEN) {
-                state.ws.send(JSON.stringify({ type: 'hangup' }));
-            }
-            state.ws.close();
-            state.ws = null;
-        }
-
-        if (state.audioRecorder) {
-            state.audioRecorder.stop();
-            state.audioRecorder = null;
-        }
-
-        if (state.audioPlayer) {
-            state.audioPlayer.close();
-            state.audioPlayer = null;
-        }
-
-        updateCallUiState(false);
-        updateLiveBadge('idle', 'Standby');
-        connectionPill.classList.remove('live-active');
-        connectionText.textContent = 'Ready';
-        appendTranscriptMessage('system', 'Call ended. Thank you for visiting HR Enterprises.');
-
-        // Refresh call history
-        setTimeout(loadCallLogs, 1200);
-    }
-
-    function toggleMute() {
-        state.isMuted = !state.isMuted;
-        if (state.audioRecorder) {
-            state.audioRecorder.setMuted(state.isMuted);
-        }
-
-        if (state.isMuted) {
-            muteBtn.classList.add('muted');
-            muteIcon.textContent = '🔇';
-            muteLabel.textContent = 'Unmute';
-            const micVoiceBtn = document.getElementById('micVoiceBtn');
-            if (micVoiceBtn) {
-                micVoiceBtn.style.background = 'rgba(239, 68, 68, 0.25)';
-                micVoiceBtn.style.borderColor = 'rgba(239, 68, 68, 0.6)';
-            }
-            showToast('Microphone muted', 'info');
+    function toggleAssistantWindow(open) {
+        state.isAssistantOpen = typeof open === 'boolean' ? open : !state.isAssistantOpen;
+        if (state.isAssistantOpen) {
+            jackAssistantPopup.classList.add('show');
+            if (chatInput) chatInput.focus();
         } else {
-            muteBtn.classList.remove('muted');
-            muteIcon.textContent = '🎙️';
-            muteLabel.textContent = 'Mute';
-            const micVoiceBtn = document.getElementById('micVoiceBtn');
-            if (micVoiceBtn) {
-                micVoiceBtn.style.background = 'rgba(16, 185, 129, 0.25)';
-                micVoiceBtn.style.borderColor = 'rgba(16, 185, 129, 0.6)';
-            }
-            showToast('Microphone active', 'info');
+            jackAssistantPopup.classList.remove('show');
         }
     }
 
-    function updateCallUiState(isActive) {
-        const micVoiceBtn = document.getElementById('micVoiceBtn');
-        if (micVoiceBtn) {
-            if (isActive) {
-                micVoiceBtn.style.background = 'rgba(16, 185, 129, 0.25)';
-                micVoiceBtn.style.borderColor = 'rgba(16, 185, 129, 0.6)';
-                micVoiceBtn.title = 'Microphone Active (Click to mute/unmute)';
-            } else {
-                micVoiceBtn.style.background = 'rgba(255, 255, 255, 0.08)';
-                micVoiceBtn.style.borderColor = 'rgba(255, 255, 255, 0.15)';
-                micVoiceBtn.title = 'Speak via Microphone';
-            }
-        }
-
-        if (isActive) {
-            startCallBtn.style.display = 'none';
-            endCallBtn.style.display = 'flex';
-            muteBtn.style.display = 'flex';
-            consoleHero.classList.add('active-call');
-        } else {
-            startCallBtn.style.display = 'flex';
-            endCallBtn.style.display = 'none';
-            muteBtn.style.display = 'none';
-            consoleHero.classList.remove('active-call');
-            hideToolExecution();
-        }
+    if (jackFloatingBtn) {
+        jackFloatingBtn.addEventListener('click', () => toggleAssistantWindow());
+    }
+    if (closeAssistantBtn) {
+        closeAssistantBtn.addEventListener('click', () => toggleAssistantWindow(false));
+    }
+    if (minimizeAssistantBtn) {
+        minimizeAssistantBtn.addEventListener('click', () => toggleAssistantWindow(false));
+    }
+    if (quickTalkBtn) {
+        quickTalkBtn.addEventListener('click', () => toggleAssistantWindow(true));
+    }
+    if (quickTriggerJackBtn) {
+        quickTriggerJackBtn.addEventListener('click', () => toggleAssistantWindow(true));
     }
 
     function updateLiveBadge(type, text) {
-        liveBadge.className = `live-badge ${type}`;
-        badgeText.textContent = text;
+        if (liveBadge) {
+            liveBadge.className = `live-badge ${type}`;
+        }
+        if (badgeText) {
+            badgeText.textContent = text;
+        }
+        const sidebarAiState = document.getElementById('sidebarAiState');
+        if (sidebarAiState) {
+            if (type === 'speaking') sidebarAiState.textContent = 'Speaking...';
+            else if (type === 'listening') sidebarAiState.textContent = 'Listening...';
+            else if (type === 'processing') sidebarAiState.textContent = 'Thinking...';
+            else sidebarAiState.textContent = 'Online & Ready';
+        }
     }
 
     function showToolExecution(toolName, args) {
+        if (!activeToolBanner || !toolBannerText) return;
         activeToolBanner.style.display = 'flex';
-        let label = 'Processing front-desk request...';
-        if (toolName === 'search_doctors') label = 'Searching specialist doctors in directory...';
-        else if (toolName === 'check_availability') label = 'Checking real calendar availability...';
-        else if (toolName === 'book_appointment') label = `Confirming verified appointment with ${args.staff_or_department || 'doctor'}...`;
-        else if (toolName === 'cancel_appointment') label = 'Cancelling scheduled appointment...';
-        else if (toolName === 'leave_message') label = `Logging message for ${args.recipient_name || 'staff member'}...`;
+        let label = 'Processing front-desk clinical request...';
+        if (toolName === 'search_doctors') label = 'Searching medical specialists in directory...';
+        else if (toolName === 'check_availability') label = 'Checking live doctor calendar availability...';
+        else if (toolName === 'book_appointment') label = `Confirming verified booking with ${args.staff_or_department || 'doctor'}...`;
+        else if (toolName === 'cancel_appointment') label = 'Cancelling requested appointment...';
+        else if (toolName === 'leave_message') label = `Logging caller message for ${args.recipient_name || 'clinic'}...`;
         else if (toolName === 'lookup_directory') label = `Searching directory for '${args.query || ''}'...`;
-        else if (toolName === 'get_company_info') label = 'Retrieving office details & directions...';
-        else if (toolName === 'transfer_call') label = `Routing call to ${args.recipient_or_department || 'extension'}...`;
+        else if (toolName === 'get_company_info') label = 'Retrieving hospital hours & parking directions...';
+        else if (toolName === 'transfer_call') label = `Routing call to ${args.recipient_or_department || 'department'}...`;
 
         toolBannerText.textContent = label;
     }
 
-    function hideToolExecution(toolName, result) {
+    function hideToolExecution() {
+        if (!activeToolBanner) return;
         setTimeout(() => {
             activeToolBanner.style.display = 'none';
         }, 800);
     }
 
-    // =========================================================================
-    // Transcript Feed & Text Chat
-    // =========================================================================
-
     function appendTranscriptMessage(role, text) {
-        if (!text) return;
+        if (!transcriptFeed || !text) return;
 
         if (role === 'system') {
             const notice = document.createElement('div');
@@ -676,27 +457,371 @@ document.addEventListener('DOMContentLoaded', () => {
         msgDiv.appendChild(avatar);
         msgDiv.appendChild(bubble);
         transcriptFeed.appendChild(msgDiv);
-
         transcriptFeed.scrollTop = transcriptFeed.scrollHeight;
     }
 
+    // Prompt Suggestions in Assistant
+    promptPills.forEach(pill => {
+        pill.addEventListener('click', () => {
+            const promptText = pill.getAttribute('data-prompt');
+            if (promptText) {
+                sendTextMessage(promptText);
+            }
+        });
+    });
+
+    // =========================================================================
+    // Speech Synthesis & Voice Processing
+    // =========================================================================
+    function speakJack(text, onComplete) {
+        if (!('speechSynthesis' in window)) {
+            if (onComplete) onComplete();
+            return;
+        }
+        try {
+            window.speechSynthesis.cancel();
+            window.speechSynthesis.resume();
+        } catch (e) { }
+
+        // Clean markdown symbols for smooth, natural voice speech
+        const spokenText = (text || '')
+            .replace(/[*_#`~\[\]\(\)]/g, '')
+            .replace(/•/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+
+        if (!spokenText) {
+            if (onComplete) onComplete();
+            return;
+        }
+
+        const utterance = new SpeechSynthesisUtterance(spokenText);
+        utterance.rate = 1.05;
+        utterance.pitch = 1.0;
+        utterance.lang = 'en-US';
+
+        const voices = window.speechSynthesis.getVoices();
+        const preferred = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Samantha') || v.name.includes('Alex')));
+        if (preferred) utterance.voice = preferred;
+
+        utterance.onstart = () => {
+            state.isJackSpeaking = true;
+            updateLiveBadge('speaking', 'Jack Speaking');
+        };
+
+        utterance.onend = () => {
+            state.isJackSpeaking = false;
+            if (state.isCallActive) {
+                updateLiveBadge('listening', 'Listening...');
+            } else {
+                updateLiveBadge('idle', 'Standby');
+            }
+            if (onComplete) onComplete();
+        };
+
+        utterance.onerror = () => {
+            state.isJackSpeaking = false;
+            updateLiveBadge('idle', 'Standby');
+            if (onComplete) onComplete();
+        };
+
+        window.speechSynthesis.speak(utterance);
+    }
+
+    // =========================================================================
+    // Browser Voice Session (Speech Recognition Fallback Mode)
+    // =========================================================================
+    function startBrowserVoiceSession() {
+        const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRec) {
+            showToast('Voice speech recognition not supported in this browser. Please use text chat.', 'error');
+            return;
+        }
+
+        state.isSpeechRecognitionMode = true;
+        state.isCallActive = true;
+        updateCallUiState(true);
+        updateLiveBadge('listening', 'Listening...');
+        appendTranscriptMessage('system', 'Connected to Jack via Voice Assistant mode. Speak into your microphone!');
+
+        if (state.chatHistory.length === 0) {
+            const greetingText = "Good day! Welcome to HR Enterprises. My name is Jack, your AI Voice Receptionist. How may I assist you with your appointment or inquiry today?";
+            state.chatHistory.push({ role: 'model', text: greetingText });
+            appendTranscriptMessage('model', greetingText);
+            speakJack(greetingText);
+        }
+
+        const recognition = new SpeechRec();
+        recognition.continuous = true;
+        recognition.interimResults = false;
+        recognition.lang = 'en-US';
+
+        recognition.onspeechstart = () => {
+            if (state.isJackSpeaking) {
+                try { window.speechSynthesis.cancel(); } catch (e) { }
+                state.isJackSpeaking = false;
+                updateLiveBadge('listening', 'Listening...');
+            }
+        };
+
+        recognition.onresult = async (event) => {
+            const last = event.results.length - 1;
+            const transcript = event.results[last][0].transcript.trim();
+            if (!transcript || state.isMuted) return;
+
+            if (state.isJackSpeaking) {
+                try { window.speechSynthesis.cancel(); } catch (e) { }
+                state.isJackSpeaking = false;
+            }
+
+            appendTranscriptMessage('user', transcript);
+            updateLiveBadge('processing', 'Jack Thinking...');
+            state.chatHistory.push({ role: 'user', text: transcript });
+
+            try {
+                const res = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message: transcript,
+                        history: state.chatHistory,
+                        api_key: state.apiKey
+                    })
+                });
+
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Chat request failed');
+
+                state.chatHistory.push({ role: 'model', text: data.reply });
+                appendTranscriptMessage('model', data.reply);
+                speakJack(data.reply);
+
+                if (data.actions && data.actions.length > 0) {
+                    loadDashboardStats();
+                    loadAppointments();
+                    loadMessages();
+                    loadDoctors();
+                    loadPatients();
+                }
+            } catch (err) {
+                console.error('Speech interaction error:', err);
+                showToast(err.message, 'error');
+                updateLiveBadge('listening', 'Listening...');
+            }
+        };
+
+        recognition.onerror = (e) => {
+            if (e.error !== 'no-speech') {
+                console.warn('Speech recognition warning:', e.error);
+            }
+        };
+
+        recognition.onend = () => {
+            if (state.isCallActive && state.isSpeechRecognitionMode) {
+                try { recognition.start(); } catch (e) { }
+            }
+        };
+
+        try {
+            recognition.start();
+            state.speechRecognition = recognition;
+        } catch (e) {
+            console.error('Could not start SpeechRecognition:', e);
+            showToast('Microphone access denied', 'error');
+            endVoiceCall();
+        }
+    }
+
+    // =========================================================================
+    // Live Voice Call Management (WebSocket Mode)
+    // =========================================================================
+    async function startVoiceCall() {
+        if (state.isCallActive) return;
+
+        updateLiveBadge('processing', 'Connecting...');
+        if (connectionText) connectionText.textContent = 'Connecting...';
+
+        const isVercelHost = window.location.hostname.endsWith('vercel.app') || window.location.hostname.includes('vercel');
+        if ((isVercelHost && !state.customWsUrl) || (!state.apiKey && !state.customWsUrl)) {
+            startBrowserVoiceSession();
+            return;
+        }
+
+        try {
+            state.audioPlayer = new window.PcmAudioPlayer(24000);
+            state.audioPlayer.init();
+            state.audioPlayer.onPlaybackStateChange = (isPlaying) => {
+                if (isPlaying) updateLiveBadge('speaking', 'Jack Speaking');
+                else if (state.isCallActive) updateLiveBadge('listening', 'Listening...');
+            };
+
+            state.audioRecorder = new window.PcmAudioRecorder({
+                targetSampleRate: 16000,
+                onAudioChunk: (base64Pcm) => {
+                    if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+                        state.ws.send(JSON.stringify({ type: 'audio', data: base64Pcm }));
+                    }
+                },
+                onVolumeChange: (vol) => {
+                    state.currentVolume = vol;
+                }
+            });
+            await state.audioRecorder.start();
+
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const queryParams = new URLSearchParams();
+            if (state.apiKey) queryParams.set('api_key', state.apiKey);
+            if (state.voice) queryParams.set('voice', state.voice);
+
+            let wsUrl = state.customWsUrl || `${protocol}//${window.location.host}/ws/live?${queryParams.toString()}`;
+            let connectionOpened = false;
+            state.ws = new WebSocket(wsUrl);
+
+            state.ws.onopen = () => {
+                connectionOpened = true;
+                state.isCallActive = true;
+                updateCallUiState(true);
+                if (connectionPill) connectionPill.classList.add('live-active');
+                if (connectionText) connectionText.textContent = 'Live Audio Call';
+                appendTranscriptMessage('system', 'Connected to front desk. Jack is listening...');
+            };
+
+            state.ws.onmessage = (event) => {
+                handleWebSocketMessage(event.data);
+            };
+
+            state.ws.onerror = (err) => {
+                console.warn('WebSocket connection error:', err);
+                if (!connectionOpened) {
+                    showToast('Switching to Voice Assistant mode...', 'info');
+                    if (state.audioRecorder) { state.audioRecorder.stop(); state.audioRecorder = null; }
+                    if (state.audioPlayer) { state.audioPlayer.close(); state.audioPlayer = null; }
+                    startBrowserVoiceSession();
+                } else {
+                    showToast('WebSocket connection error', 'error');
+                }
+            };
+
+            state.ws.onclose = () => {
+                if (connectionOpened) endVoiceCall();
+            };
+
+        } catch (err) {
+            console.error('Failed to start call:', err);
+            startBrowserVoiceSession();
+        }
+    }
+
+    function endVoiceCall() {
+        state.isCallActive = false;
+        state.isSpeechRecognitionMode = false;
+        state.isMuted = false;
+        state.currentVolume = 0;
+
+        try { window.speechSynthesis.cancel(); } catch (e) { }
+
+        if (state.speechRecognition) {
+            try { state.speechRecognition.stop(); } catch (e) { }
+            state.speechRecognition = null;
+        }
+
+        if (state.audioRecorder) {
+            state.audioRecorder.stop();
+            state.audioRecorder = null;
+        }
+
+        if (state.audioPlayer) {
+            state.audioPlayer.close();
+            state.audioPlayer = null;
+        }
+
+        if (state.ws) {
+            try { state.ws.close(); } catch (e) { }
+            state.ws = null;
+        }
+
+        updateCallUiState(false);
+        updateLiveBadge('idle', 'Standby');
+        if (connectionPill) connectionPill.classList.remove('live-active');
+        if (connectionText) connectionText.textContent = 'Ready';
+        appendTranscriptMessage('system', 'Voice call ended.');
+    }
+
+    function updateCallUiState(isActive) {
+        if (startCallBtn) startCallBtn.style.display = isActive ? 'none' : 'flex';
+        if (endCallBtn) endCallBtn.style.display = isActive ? 'flex' : 'none';
+        if (muteBtn) muteBtn.style.display = isActive ? 'flex' : 'none';
+        hideToolExecution();
+    }
+
+    function handleWebSocketMessage(rawMsg) {
+        try {
+            const msg = JSON.parse(rawMsg);
+            switch (msg.type) {
+                case 'status':
+                    if (msg.status === 'connected') updateLiveBadge('listening', 'Listening...');
+                    break;
+                case 'audio':
+                    if (state.audioPlayer && msg.data) state.audioPlayer.playChunk(msg.data);
+                    break;
+                case 'transcript':
+                    appendTranscriptMessage(msg.role === 'model' ? 'model' : 'user', msg.text);
+                    break;
+                case 'tool_executing':
+                    showToolExecution(msg.name, msg.args);
+                    break;
+                case 'tool_result':
+                    hideToolExecution();
+                    if (['book_appointment', 'cancel_appointment'].includes(msg.name)) {
+                        loadDashboardStats();
+                        loadAppointments();
+                        loadPatients();
+                    } else if (msg.name === 'leave_message') {
+                        loadDashboardStats();
+                        loadMessages();
+                    }
+                    break;
+                case 'interrupted':
+                    if (state.audioPlayer) state.audioPlayer.interrupt();
+                    updateLiveBadge('listening', 'Listening...');
+                    break;
+                case 'error':
+                    showToast(msg.message, 'error');
+                    appendTranscriptMessage('system', `Notice: ${msg.message}`);
+                    break;
+            }
+        } catch (e) {
+            console.error('Error parsing WebSocket message:', e);
+        }
+    }
+
+    // Call Buttons Listeners
+    if (startCallBtn) startCallBtn.addEventListener('click', () => startVoiceCall());
+    if (endCallBtn) endCallBtn.addEventListener('click', () => endVoiceCall());
+    if (muteBtn) {
+        muteBtn.addEventListener('click', () => {
+            state.isMuted = !state.isMuted;
+            if (muteIcon) muteIcon.textContent = state.isMuted ? '🔇' : '🎤';
+            if (muteLabel) muteLabel.textContent = state.isMuted ? 'Unmute' : 'Mute';
+            showToast(state.isMuted ? 'Microphone muted' : 'Microphone unmuted', 'info');
+        });
+    }
+
+    // =========================================================================
+    // Text Chat & Fallback REST Execution
+    // =========================================================================
     async function sendTextMessage(text) {
-        const query = text.trim();
+        const query = (text || '').trim();
         if (!query) return;
 
-        chatInput.value = '';
+        if (chatInput) chatInput.value = '';
         appendTranscriptMessage('user', query);
         state.chatHistory.push({ role: 'user', text: query });
 
         if (state.isCallActive && state.ws && state.ws.readyState === WebSocket.OPEN) {
-            // Forward text into live session
-            state.ws.send(JSON.stringify({
-                type: 'text',
-                text: query
-            }));
+            state.ws.send(JSON.stringify({ type: 'text', text: query }));
             updateLiveBadge('processing', 'Thinking...');
         } else {
-            // Conversational REST Chat
             updateLiveBadge('processing', 'Jack Thinking...');
             try {
                 const res = await fetch('/api/chat', {
@@ -710,21 +835,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
 
                 const data = await res.json();
-                if (!res.ok) {
-                    throw new Error(data.detail || 'Chat request failed');
-                }
+                if (!res.ok) throw new Error(data.detail || 'Chat request failed');
 
                 state.chatHistory.push({ role: 'model', text: data.reply });
                 appendTranscriptMessage('model', data.reply);
                 updateLiveBadge('idle', 'Standby');
-
                 speakJack(data.reply);
 
-                // If tools modified data, refresh
                 if (data.actions && data.actions.length > 0) {
+                    loadDashboardStats();
                     loadAppointments();
                     loadMessages();
                     loadDoctors();
+                    loadPatients();
                 }
 
             } catch (err) {
@@ -736,185 +859,256 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // =========================================================================
-    // Front Desk Data Loaders & Tabs
-    // =========================================================================
-
-    async function loadCompanyDetails() {
-        try {
-            const res = await fetch('/api/company');
-            const data = await res.json();
-            state.companyInfo = data;
-
-            document.getElementById('companyHeaderTitle').textContent = data.name;
-            document.getElementById('receptionistNameDisplay').textContent = data.receptionist_name;
-
-            // Render FAQs
-            if (data.knowledge_base) {
-                faqList.innerHTML = data.knowledge_base.map(kb => `
-                    <div class="faq-item">
-                        <div class="faq-title">${escapeHtml(kb.title)} (${escapeHtml(kb.category)})</div>
-                        <div class="faq-content">${escapeHtml(kb.content)}</div>
-                    </div>
-                `).join('');
+    if (sendChatBtn) {
+        sendChatBtn.addEventListener('click', () => {
+            if (chatInput) sendTextMessage(chatInput.value);
+        });
+    }
+    if (chatInput) {
+        chatInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                sendTextMessage(chatInput.value);
             }
+        });
+    }
+    if (micVoiceBtn) {
+        micVoiceBtn.addEventListener('click', () => {
+            if (state.isCallActive) {
+                endVoiceCall();
+            } else {
+                startBrowserVoiceSession();
+            }
+        });
+    }
+
+    // =========================================================================
+    // Data Loading: Dashboard Statistics & Overview
+    // =========================================================================
+    async function loadDashboardStats() {
+        try {
+            const res = await fetch('/api/stats');
+            if (!res.ok) return;
+            const stats = await res.json();
+
+            if (statTotalAppts) statTotalAppts.textContent = stats.total_appointments || 0;
+            if (statAvailableDocs) statAvailableDocs.textContent = stats.available_doctors || 0;
+            if (statTotalDocsSub) statTotalDocsSub.textContent = `out of ${stats.total_doctors || 10} doctors`;
+            if (statTotalPatients) statTotalPatients.textContent = stats.registered_patients || 0;
+            if (statPendingAppts) statPendingAppts.textContent = stats.pending_appointments || 0;
+
+            if (sidebarApptBadge) sidebarApptBadge.textContent = stats.total_appointments || 0;
+            if (sidebarDoctorBadge) sidebarDoctorBadge.textContent = stats.available_doctors || 0;
+            if (sidebarPatientBadge) sidebarPatientBadge.textContent = stats.registered_patients || 0;
+            if (sidebarMsgBadge) sidebarMsgBadge.textContent = stats.unread_messages || 0;
+            if (notifBadge) notifBadge.textContent = stats.unread_messages || 0;
+            if (notifDropdownCount) notifDropdownCount.textContent = `${stats.unread_messages || 0} Unread`;
+
+            // Load sub-previews
+            loadDashboardApptsPreview();
+            loadDashboardDoctorsPreview();
+            loadDashboardMessagesPreview();
         } catch (e) {
-            console.error('Error loading company info:', e);
+            console.error('Error loading stats:', e);
         }
     }
 
+    async function loadDashboardApptsPreview() {
+        try {
+            const res = await fetch('/api/appointments');
+            const appts = await res.json();
+            state.allAppointments = appts;
+
+            if (!dashboardApptsTbody) return;
+
+            if (appts.length === 0) {
+                dashboardApptsTbody.innerHTML = `<tr><td colspan="5" class="table-loading">No scheduled consultations found.</td></tr>`;
+                return;
+            }
+
+            const previewList = appts.slice(0, 5);
+            dashboardApptsTbody.innerHTML = previewList.map(a => `
+                <tr>
+                    <td><strong>👤 ${escapeHtml(a.visitor_name)}</strong></td>
+                    <td>🩺 ${escapeHtml(a.staff_name)} <span style="font-size: 0.72rem; color: var(--text-muted);">(${escapeHtml(a.department)})</span></td>
+                    <td>📅 ${escapeHtml(a.date)} • ⏰ ${escapeHtml(a.time_slot)}</td>
+                    <td><span class="badge-status ${a.status.toLowerCase()}">${escapeHtml(a.status)}</span></td>
+                    <td>
+                        <button class="btn-table-action view" onclick="window.viewAppointmentDetails(${a.id})">Details</button>
+                    </td>
+                </tr>
+            `).join('');
+        } catch (e) {
+            console.error('Error previewing appts:', e);
+        }
+    }
+
+    async function loadDashboardDoctorsPreview() {
+        try {
+            const res = await fetch('/api/doctors');
+            const docs = await res.json();
+            state.allDoctors = docs;
+
+            if (!dashboardDoctorsMini) return;
+
+            const topDocs = docs.slice(0, 4);
+            dashboardDoctorsMini.innerHTML = topDocs.map(d => `
+                <div class="mini-doctor-item">
+                    <div class="mini-doc-left">
+                        <div class="mini-doc-avatar">${d.avatar_emoji || '🩺'}</div>
+                        <div class="mini-doc-info">
+                            <h4>${escapeHtml(d.name)}</h4>
+                            <p>${escapeHtml(d.specialization)} • ${escapeHtml(d.department)}</p>
+                        </div>
+                    </div>
+                    <button class="btn-book-quick" onclick="window.openDoctorBookingModal(${d.id})">Book</button>
+                </div>
+            `).join('');
+        } catch (e) {
+            console.error('Error previewing doctors:', e);
+        }
+    }
+
+    async function loadDashboardMessagesPreview() {
+        try {
+            const res = await fetch('/api/messages');
+            const msgs = await res.json();
+            state.allMessages = msgs;
+
+            if (notifDropdownList) {
+                const unread = msgs.filter(m => !m.is_read);
+                if (unread.length === 0) {
+                    notifDropdownList.innerHTML = '<div class="notif-empty">No unread notifications.</div>';
+                } else {
+                    notifDropdownList.innerHTML = unread.slice(0, 6).map(m => `
+                        <div class="notif-item" onclick="window.markMessageReadAndOpen(${m.id})">
+                            <div class="notif-item-title">✉️ ${escapeHtml(m.caller_name)} (${escapeHtml(m.urgency)})</div>
+                            <div class="notif-item-body">"${escapeHtml(m.message)}"</div>
+                        </div>
+                    `).join('');
+                }
+            }
+
+            if (!dashboardMessagesMini) return;
+
+            if (msgs.length === 0) {
+                dashboardMessagesMini.innerHTML = '<div class="table-loading">No visitor inquiries recorded.</div>';
+                return;
+            }
+
+            dashboardMessagesMini.innerHTML = msgs.slice(0, 3).map(m => `
+                <div class="mini-msg-item">
+                    <div class="mini-msg-header">
+                        <span class="mini-msg-caller">👤 ${escapeHtml(m.caller_name)}</span>
+                        <span class="mini-msg-time">${new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    </div>
+                    <div class="mini-msg-text">"${escapeHtml(m.message)}"</div>
+                </div>
+            `).join('');
+        } catch (e) {
+            console.error('Error previewing messages:', e);
+        }
+    }
+
+    // =========================================================================
+    // Appointments Management Section
+    // =========================================================================
     async function loadAppointments() {
         try {
             const res = await fetch('/api/appointments');
             const appts = await res.json();
+            state.allAppointments = appts;
+            renderAppointments();
+        } catch (e) {
+            console.error('Error loading appointments:', e);
+            if (appointmentsList) appointmentsList.innerHTML = '<tr><td colspan="9" class="table-loading">Failed to load appointments.</td></tr>';
+        }
+    }
 
-            apptCountBadge.textContent = appts.filter(a => a.status === 'Confirmed').length;
+    function renderAppointments() {
+        if (!appointmentsList) return;
 
-            if (appts.length === 0) {
-                appointmentsList.innerHTML = '<div class="system-notice">No upcoming appointments scheduled.</div>';
-                return;
+        const q = (apptSearchInput ? apptSearchInput.value : '').toLowerCase().trim();
+        const filter = state.currentApptFilter;
+        const todayStr = new Date().toISOString().split('T')[0];
+
+        // Counts
+        const countAll = state.allAppointments.length;
+        const countToday = state.allAppointments.filter(a => a.date === todayStr && a.status !== 'Cancelled').length;
+        const countUpcoming = state.allAppointments.filter(a => a.date >= todayStr && a.status === 'Confirmed').length;
+        const countCompleted = state.allAppointments.filter(a => a.status === 'Completed').length;
+        const countCancelled = state.allAppointments.filter(a => a.status === 'Cancelled').length;
+
+        if (countFilterAll) countFilterAll.textContent = countAll;
+        if (countFilterToday) countFilterToday.textContent = countToday;
+        if (countFilterUpcoming) countFilterUpcoming.textContent = countUpcoming;
+        if (countFilterCompleted) countFilterCompleted.textContent = countCompleted;
+        if (countFilterCancelled) countFilterCancelled.textContent = countCancelled;
+
+        let filtered = state.allAppointments.filter(a => {
+            // Text Search
+            if (q) {
+                const searchCorpus = `${a.visitor_name} ${a.staff_name} ${a.department} ${a.date} ${a.purpose}`.toLowerCase();
+                if (!searchCorpus.includes(q)) return false;
             }
 
-            appointmentsList.innerHTML = appts.map(a => {
-                const isDoctor = a.staff_name.startsWith('Dr.') || a.department.includes('Centre') || a.department.includes('Clinic');
-                const roleIcon = isDoctor ? '🩺' : '💼';
-                const label = isDoctor ? 'Consultation with' : 'Meeting with';
+            // Tab Filter
+            if (filter === 'today') return a.date === todayStr && a.status !== 'Cancelled';
+            if (filter === 'upcoming') return a.date >= todayStr && a.status === 'Confirmed';
+            if (filter === 'completed') return a.status === 'Completed';
+            if (filter === 'cancelled') return a.status === 'Cancelled';
+            return true;
+        });
 
-                return `
-                <div class="appointment-card">
-                    <div class="appointment-header">
-                        <div class="appointment-visitor">👤 ${escapeHtml(a.visitor_name)}</div>
-                        <div class="appointment-time">📅 ${escapeHtml(a.date)} • ⏰ ${escapeHtml(a.time_slot)}</div>
-                    </div>
-                    <div class="appointment-details">
-                        ${label}: <strong>${roleIcon} ${escapeHtml(a.staff_name)}</strong>
-                        <span style="color: var(--text-muted); font-size: 0.82rem;">(${escapeHtml(a.department)})</span>
-                    </div>
-                    <div class="appointment-purpose">
-                        "${escapeHtml(a.purpose || 'Appointment consultation')}"
-                    </div>
-                    <div class="appointment-footer">
-                        <span class="badge-status ${a.status.toLowerCase()}">${escapeHtml(a.status)}</span>
-                        ${a.status !== 'Cancelled' ? `<button class="btn-cancel-appt" onclick="window.cancelAppointment(${a.id})">Cancel</button>` : ''}
-                    </div>
-                </div>
+        if (filtered.length === 0) {
+            appointmentsList.innerHTML = '<tr><td colspan="9" class="table-loading">No matching appointments found.</td></tr>';
+            return;
+        }
+
+        appointmentsList.innerHTML = filtered.map(a => {
+            const isCancelled = a.status === 'Cancelled';
+            const isCompleted = a.status === 'Completed';
+
+            return `
+                <tr>
+                    <td><span style="font-family: var(--font-mono); font-size: 0.76rem; color: var(--cyan);">#${a.id}</span></td>
+                    <td><strong>👤 ${escapeHtml(a.visitor_name)}</strong></td>
+                    <td><span style="font-family: var(--font-mono); font-size: 0.74rem;">${escapeHtml(a.contact_info)}</span></td>
+                    <td>🩺 ${escapeHtml(a.staff_name)}</td>
+                    <td><span style="font-size: 0.74rem; color: var(--text-muted);">${escapeHtml(a.department)}</span></td>
+                    <td>📅 ${escapeHtml(a.date)} • ⏰ ${escapeHtml(a.time_slot)}</td>
+                    <td><span style="font-size: 0.76rem; max-width: 140px; display: inline-block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">"${escapeHtml(a.purpose || 'Consultation')}"</span></td>
+                    <td><span class="badge-status ${a.status.toLowerCase()}">${escapeHtml(a.status)}</span></td>
+                    <td>
+                        <div style="display: flex; gap: 0.35rem;">
+                            <button class="btn-table-action view" onclick="window.viewAppointmentDetails(${a.id})">View</button>
+                            ${!isCancelled && !isCompleted ? `<button class="btn-table-action" style="border: 1px solid var(--border-medium); color: #60a5fa;" onclick="window.markAppointmentCompleted(${a.id})">Done</button>` : ''}
+                            ${!isCancelled ? `<button class="btn-table-action cancel" onclick="window.cancelAppointment(${a.id})">Cancel</button>` : ''}
+                        </div>
+                    </td>
+                </tr>
             `;
-            }).join('');
-        } catch (e) {
-            appointmentsList.innerHTML = '<div class="system-notice">Failed to load appointments.</div>';
-        }
+        }).join('');
     }
 
-    async function loadMessages() {
-        try {
-            const res = await fetch('/api/messages');
-            const msgs = await res.json();
-
-            msgCountBadge.textContent = msgs.filter(m => !m.is_read).length;
-
-            if (msgs.length === 0) {
-                messagesList.innerHTML = '<div class="system-notice">Inbox is empty. No visitor messages.</div>';
-                return;
-            }
-
-            messagesList.innerHTML = msgs.map(m => `
-                <div class="message-card ${!m.is_read ? 'unread' : ''} ${m.urgency === 'Urgent' ? 'urgent' : ''}">
-                    <div class="message-header">
-                        <span class="message-caller">${escapeHtml(m.caller_name)} (${escapeHtml(m.contact_info)})</span>
-                        <span class="badge-status ${m.urgency === 'Urgent' ? 'cancelled' : 'confirmed'}">${escapeHtml(m.urgency)}</span>
-                    </div>
-                    <div class="message-recipient">For: ${escapeHtml(m.recipient_name)}</div>
-                    <div class="message-content">"${escapeHtml(m.message)}"</div>
-                    <div class="message-footer">
-                        <span>${new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                        <div>
-                            ${!m.is_read ? `<button class="btn-cancel-appt" style="color: var(--primary); margin-right: 0.5rem;" onclick="window.markMessageRead(${m.id})">Mark Read</button>` : ''}
-                            <button class="btn-cancel-appt" onclick="window.deleteMessage(${m.id})">Delete</button>
-                        </div>
-                    </div>
-                </div>
-            `).join('');
-        } catch (e) {
-            messagesList.innerHTML = '<div class="system-notice">Failed to load messages.</div>';
-        }
+    if (apptFilterGroup) {
+        apptFilterGroup.querySelectorAll('.filter-pill').forEach(btn => {
+            btn.addEventListener('click', () => {
+                apptFilterGroup.querySelectorAll('.filter-pill').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                state.currentApptFilter = btn.getAttribute('data-filter');
+                renderAppointments();
+            });
+        });
     }
 
-    async function loadDirectory(searchQuery = '') {
-        try {
-            const url = searchQuery ? `/api/directory?q=${encodeURIComponent(searchQuery)}` : '/api/directory';
-            const res = await fetch(url);
-            const staff = await res.json();
-
-            if (staff.length === 0) {
-                directoryList.innerHTML = '<div class="system-notice">No staff found matching your search.</div>';
-                return;
-            }
-
-            directoryList.innerHTML = staff.map(s => {
-                let statusClass = 'available';
-                if (s.status.includes('Meeting')) statusClass = 'meeting';
-                else if (s.status.includes('Office') || s.status.includes('Leave')) statusClass = 'away';
-
-                return `
-                    <div class="staff-card">
-                        <div class="staff-info">
-                            <h4>${escapeHtml(s.name)}</h4>
-                            <p>${escapeHtml(s.title)} • ${escapeHtml(s.department)}</p>
-                        </div>
-                        <div class="staff-contact">
-                            <span class="staff-ext">Ext. ${escapeHtml(s.phone_extension)}</span>
-                            <span class="status-badge ${statusClass}">${escapeHtml(s.status)}</span>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        } catch (e) {
-            directoryList.innerHTML = '<div class="system-notice">Failed to load directory.</div>';
-        }
-    }
-
-    async function loadCallLogs() {
-        try {
-            const res = await fetch('/api/call-logs');
-            const logs = await res.json();
-
-            if (logs.length === 0) {
-                logsList.innerHTML = '<div class="system-notice">No call sessions recorded yet.</div>';
-                return;
-            }
-
-            logsList.innerHTML = logs.map(l => `
-                <div class="appointment-card">
-                    <div class="appointment-header">
-                        <div class="appointment-visitor">${escapeHtml(l.caller_identifier)}</div>
-                        <div class="appointment-time">${l.duration_seconds}s call</div>
-                    </div>
-                    <div class="appointment-details">
-                        Started: ${new Date(l.started_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </div>
-                    <div class="appointment-purpose">
-                        ${escapeHtml(l.summary)}
-                    </div>
-                </div>
-            `).join('');
-        } catch (e) {
-            logsList.innerHTML = '<div class="system-notice">Failed to load call logs.</div>';
-        }
+    if (apptSearchInput) {
+        apptSearchInput.addEventListener('input', () => renderAppointments());
     }
 
     // =========================================================================
-    // Doctors Directory & Booking
+    // Doctors Directory Section
     // =========================================================================
-
-    function generateStars(rating) {
-        const fullStars = Math.floor(rating);
-        const halfStar = rating % 1 >= 0.5;
-        let stars = '★'.repeat(fullStars);
-        if (halfStar) stars += '½';
-        stars += '☆'.repeat(5 - fullStars - (halfStar ? 1 : 0));
-        return stars;
-    }
-
     async function loadDoctors(searchQuery = '', specialization = '') {
         try {
             let url = '/api/doctors';
@@ -925,374 +1119,725 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const res = await fetch(url);
             const doctors = await res.json();
+            state.allDoctors = doctors;
 
-            doctorCountBadge.textContent = doctors.filter(d => d.status === 'Available').length;
-
-            if (doctors.length === 0) {
-                doctorsList.innerHTML = '<div class="system-notice">No doctors found matching your criteria.</div>';
-                return;
-            }
-
-            doctorsList.innerHTML = doctors.map(d => {
-                const isAvailable = d.status === 'Available';
-                let statusClass = 'available';
-                if (d.status.includes('Surgery') || d.status.includes('Meeting')) statusClass = 'meeting';
-                else if (d.status.includes('Leave') || d.status.includes('Unavailable')) statusClass = 'away';
-
-                return `
-                    <div class="doctor-card">
-                        <div class="doctor-card-header">
-                            <div class="doctor-avatar">${d.avatar_emoji || '🩺'}</div>
-                            <div class="doctor-header-info">
-                                <h4>${escapeHtml(d.name)}</h4>
-                                <div class="doctor-specialization">${escapeHtml(d.specialization)}</div>
-                                <div class="doctor-qualification">${escapeHtml(d.qualification)}</div>
-                            </div>
-                            <div class="doctor-header-status">
-                                <div class="doctor-rating">
-                                    <span class="stars">${generateStars(d.rating)}</span>
-                                    <span>${d.rating}</span>
-                                </div>
-                                <div class="doctor-reviews">${d.total_reviews} reviews</div>
-                                <span class="status-badge ${statusClass}">${escapeHtml(d.status)}</span>
-                            </div>
-                        </div>
-                        <div class="doctor-body">
-                            <div class="doctor-bio">${escapeHtml(d.bio || '')}</div>
-                            <div class="doctor-meta-row">
-                                <span class="doctor-meta-chip fee"><span class="chip-icon">💰</span> ${escapeHtml(d.consultation_fee)}</span>
-                                <span class="doctor-meta-chip experience"><span class="chip-icon">📅</span> ${d.experience_years} yrs exp</span>
-                                <span class="doctor-meta-chip"><span class="chip-icon">📞</span> Ext. ${escapeHtml(d.phone_extension)}</span>
-                                <span class="doctor-meta-chip"><span class="chip-icon">🏥</span> ${escapeHtml(d.department)}</span>
-                            </div>
-                        </div>
-                        <div class="doctor-footer">
-                            <div class="doctor-availability">
-                                <strong>Available:</strong> ${escapeHtml(d.available_days)}
-                            </div>
-                            <button class="btn-book-doctor" ${!isAvailable ? 'disabled' : ''}
-                                onclick="window.openDoctorBooking(${d.id})">
-                                📋 ${isAvailable ? 'Book Appointment' : 'Unavailable'}
-                            </button>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        } catch (e) {
-            doctorsList.innerHTML = '<div class="system-notice">Failed to load doctors directory.</div>';
-        }
-    }
-
-    async function loadSpecializations() {
-        try {
-            const res = await fetch('/api/doctors/specializations/list');
-            const specs = await res.json();
-            // Only add options if we got specializations
-            if (Array.isArray(specs)) {
-                specs.forEach(spec => {
+            // Load specializations in filter dropdown if empty
+            if (doctorSpecFilter && doctorSpecFilter.options.length <= 1) {
+                const specRes = await fetch('/api/doctors/specializations/list');
+                const specs = await specRes.json();
+                specs.forEach(s => {
                     const opt = document.createElement('option');
-                    opt.value = spec;
-                    opt.textContent = spec;
+                    opt.value = s;
+                    opt.textContent = s;
                     doctorSpecFilter.appendChild(opt);
                 });
             }
+
+            renderDoctors();
         } catch (e) {
-            console.warn('Could not load specializations:', e);
+            console.error('Error loading doctors:', e);
+            if (doctorsList) doctorsList.innerHTML = '<div class="table-loading">Failed to load doctors directory.</div>';
         }
     }
 
-    // Store doctors cache for booking modal
-    let doctorsCache = [];
-    async function getDoctorsCache() {
-        if (doctorsCache.length === 0) {
-            try {
-                const res = await fetch('/api/doctors');
-                doctorsCache = await res.json();
-            } catch (e) {
-                doctorsCache = [];
+    function renderDoctors() {
+        if (!doctorsList) return;
+
+        const q = (doctorSearchInput ? doctorSearchInput.value : '').toLowerCase().trim();
+        const spec = doctorSpecFilter ? doctorSpecFilter.value : '';
+
+        let filtered = state.allDoctors.filter(d => {
+            if (q) {
+                const corpus = `${d.name} ${d.specialization} ${d.department} ${d.bio}`.toLowerCase();
+                if (!corpus.includes(q)) return false;
             }
-        }
-        return doctorsCache;
-    }
+            if (spec && d.specialization !== spec) return false;
+            return true;
+        });
 
-    window.openDoctorBooking = async function(doctorId) {
-        const doctors = await getDoctorsCache();
-        const doctor = doctors.find(d => d.id === doctorId);
-        if (!doctor) {
-            showToast('Doctor not found', 'error');
+        if (filtered.length === 0) {
+            doctorsList.innerHTML = '<div class="table-loading">No specialist doctors found matching your criteria.</div>';
             return;
         }
 
-        selectedBookingDoctor = doctor;
+        doctorsList.innerHTML = filtered.map(d => {
+            const isAvail = d.status === 'Available';
+            return `
+                <div class="doctor-card">
+                    <span class="doctor-status-pill ${isAvail ? 'available' : 'away'}">${escapeHtml(d.status)}</span>
+                    <div class="doctor-card-top">
+                        <div class="doctor-avatar-circle">${d.avatar_emoji || '🩺'}</div>
+                        <div class="doctor-card-info">
+                            <h4>${escapeHtml(d.name)}</h4>
+                            <span class="doctor-spec-tag">${escapeHtml(d.specialization)}</span>
+                            <span class="doctor-qual-tag">${escapeHtml(d.qualification)} • ${escapeHtml(d.department)}</span>
+                        </div>
+                    </div>
+                    <div class="doctor-details-grid">
+                        <div class="detail-item">
+                            <span class="detail-item-label">Experience</span>
+                            <span class="detail-item-val">${d.experience_years} Years</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-item-label">Consultation Fee</span>
+                            <span class="detail-item-val" style="color: var(--cyan);">${escapeHtml(d.consultation_fee || '₹500')}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-item-label">Rating</span>
+                            <span class="detail-item-val">⭐ ${d.rating || 4.8} / 5</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-item-label">Working Days</span>
+                            <span class="detail-item-val">${escapeHtml(d.available_days || 'Mon-Fri')}</span>
+                        </div>
+                    </div>
+                    <div class="doctor-slots-text">
+                        <strong>Available Slots:</strong> ${escapeHtml(d.available_slots || '09:00 AM - 05:00 PM')}
+                    </div>
+                    <div class="doctor-card-actions">
+                        <button class="btn-book-doctor-full" onclick="window.openDoctorBookingModal(${d.id})">
+                            📅 Book Consultation
+                        </button>
+                        <button class="btn-delete-doc" title="Remove Doctor" onclick="window.removeDoctor(${d.id})">🗑️</button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
 
-        // Populate doctor info in modal
-        bookingDoctorInfo.innerHTML = `
-            <span class="booking-doc-avatar">${doctor.avatar_emoji || '🩺'}</span>
-            <div class="booking-doc-details">
-                <h4>${escapeHtml(doctor.name)}</h4>
-                <p>${escapeHtml(doctor.specialization)} • ${escapeHtml(doctor.department)}</p>
-                <span>${escapeHtml(doctor.consultation_fee)} consultation fee</span>
+    if (doctorSearchInput) doctorSearchInput.addEventListener('input', () => renderDoctors());
+    if (doctorSpecFilter) doctorSpecFilter.addEventListener('change', () => renderDoctors());
+
+    // =========================================================================
+    // Patients Directory Section
+    // =========================================================================
+    async function loadPatients() {
+        try {
+            const res = await fetch('/api/patients');
+            const patients = await res.json();
+            state.allPatients = patients;
+            renderPatients();
+        } catch (e) {
+            console.error('Error loading patients:', e);
+            if (patientsList) patientsList.innerHTML = '<tr><td colspan="8" class="table-loading">Failed to load patient records.</td></tr>';
+        }
+    }
+
+    function renderPatients() {
+        if (!patientsList) return;
+
+        const q = (patientSearchInput ? patientSearchInput.value : '').toLowerCase().trim();
+        let filtered = state.allPatients.filter(p => {
+            if (q) {
+                const corpus = `${p.name} ${p.contact_info} ${p.last_doctor} ${p.last_department}`.toLowerCase();
+                if (!corpus.includes(q)) return false;
+            }
+            return true;
+        });
+
+        if (filtered.length === 0) {
+            patientsList.innerHTML = '<tr><td colspan="8" class="table-loading">No matching patient records found.</td></tr>';
+            return;
+        }
+
+        patientsList.innerHTML = filtered.map(p => `
+            <tr>
+                <td><strong>👤 ${escapeHtml(p.name)}</strong></td>
+                <td><span style="font-family: var(--font-mono); font-size: 0.74rem;">${escapeHtml(p.contact_info)}</span></td>
+                <td><span class="nav-badge cyan">${p.total_appointments} Consultation${p.total_appointments > 1 ? 's' : ''}</span></td>
+                <td>📅 ${escapeHtml(p.last_visit_date || 'N/A')}</td>
+                <td>🩺 ${escapeHtml(p.last_doctor || 'Clinic Specialist')}</td>
+                <td><span style="font-size: 0.72rem; color: var(--text-muted);">${escapeHtml(p.last_department || 'General')}</span></td>
+                <td><span class="badge-status ${(p.last_status || 'confirmed').toLowerCase()}">${escapeHtml(p.last_status || 'Confirmed')}</span></td>
+                <td>
+                    <button class="btn-table-action view" onclick="window.scheduleVisitForPatient('${escapeHtml(p.name)}', '${escapeHtml(p.contact_info)}')">Schedule Visit</button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    if (patientSearchInput) patientSearchInput.addEventListener('input', () => renderPatients());
+
+    // =========================================================================
+    // Caller Messages Section
+    // =========================================================================
+    async function loadMessages() {
+        try {
+            const res = await fetch('/api/messages');
+            const msgs = await res.json();
+            state.allMessages = msgs;
+            renderMessages();
+        } catch (e) {
+            console.error('Error loading messages:', e);
+            if (messagesList) messagesList.innerHTML = '<div class="table-loading">Failed to load caller messages.</div>';
+        }
+    }
+
+    function renderMessages() {
+        if (!messagesList) return;
+
+        const filter = state.currentMsgFilter;
+        const countAll = state.allMessages.length;
+        const countUnread = state.allMessages.filter(m => !m.is_read).length;
+        const countUrgent = state.allMessages.filter(m => m.urgency === 'Urgent').length;
+
+        if (msgFilterAllCount) msgFilterAllCount.textContent = countAll;
+        if (msgFilterUnreadCount) msgFilterUnreadCount.textContent = countUnread;
+        if (msgFilterUrgentCount) msgFilterUrgentCount.textContent = countUrgent;
+
+        let filtered = state.allMessages.filter(m => {
+            if (filter === 'unread') return !m.is_read;
+            if (filter === 'urgent') return m.urgency === 'Urgent';
+            return true;
+        });
+
+        if (filtered.length === 0) {
+            messagesList.innerHTML = '<div class="table-loading">No caller messages found in this category.</div>';
+            return;
+        }
+
+        messagesList.innerHTML = filtered.map(m => `
+            <div class="message-card ${!m.is_read ? 'unread' : ''} ${m.urgency === 'Urgent' ? 'urgent' : ''}">
+                <div class="message-card-header">
+                    <div>
+                        <div class="msg-caller-name">👤 ${escapeHtml(m.caller_name)}</div>
+                        <div class="msg-caller-phone">📞 ${escapeHtml(m.contact_info)}</div>
+                    </div>
+                    <span class="badge-status ${m.urgency === 'Urgent' ? 'cancelled' : 'confirmed'}">${escapeHtml(m.urgency)}</span>
+                </div>
+                <div class="msg-for-tag">Recipient: <strong>${escapeHtml(m.recipient_name)}</strong></div>
+                <div class="msg-body-content">"${escapeHtml(m.message)}"</div>
+                <div class="message-card-footer">
+                    <span>${new Date(m.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                    <div class="msg-actions-group">
+                        ${!m.is_read ? `<button class="btn-table-action view" onclick="window.markMessageRead(${m.id})">Mark Read</button>` : ''}
+                        <button class="btn-table-action cancel" onclick="window.deleteMessage(${m.id})">Delete</button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    if (msgFilterGroup) {
+        msgFilterGroup.querySelectorAll('.filter-pill').forEach(btn => {
+            btn.addEventListener('click', () => {
+                msgFilterGroup.querySelectorAll('.filter-pill').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                state.currentMsgFilter = btn.getAttribute('data-msg-filter');
+                renderMessages();
+            });
+        });
+    }
+
+    // =========================================================================
+    // Corporate Staff Directory & FAQs
+    // =========================================================================
+    async function loadDirectory(searchQuery = '') {
+        try {
+            const url = searchQuery ? `/api/directory?q=${encodeURIComponent(searchQuery)}` : '/api/directory';
+            const res = await fetch(url);
+            const staff = await res.json();
+
+            if (!directoryList) return;
+            if (staff.length === 0) {
+                directoryList.innerHTML = '<div class="table-loading">No staff found matching query.</div>';
+                return;
+            }
+
+            directoryList.innerHTML = staff.map(s => `
+                <div class="staff-card">
+                    <div class="staff-card-header">
+                        <h4>👤 ${escapeHtml(s.name)}</h4>
+                        <span class="badge-status confirmed">${escapeHtml(s.status)}</span>
+                    </div>
+                    <p style="font-size: 0.78rem; color: var(--cyan); margin-bottom: 0.35rem;">${escapeHtml(s.title)} • ${escapeHtml(s.department)}</p>
+                    <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.65rem;">${escapeHtml(s.bio || 'Corporate team member')}</p>
+                    <div style="font-size: 0.74rem; color: var(--text-secondary); display: flex; justify-content: space-between;">
+                        <span>Ext: <strong>${escapeHtml(s.phone_extension)}</strong></span>
+                        <span style="font-family: var(--font-mono);">${escapeHtml(s.email)}</span>
+                    </div>
+                </div>
+            `).join('');
+        } catch (e) {
+            console.error('Error loading directory:', e);
+        }
+    }
+
+    if (directorySearchInput) {
+        directorySearchInput.addEventListener('input', () => loadDirectory(directorySearchInput.value));
+    }
+
+    async function loadCompanyDetails() {
+        try {
+            const res = await fetch('/api/company');
+            const data = await res.json();
+            state.companyInfo = data;
+
+            if (faqList && data.knowledge_base) {
+                faqList.innerHTML = data.knowledge_base.map(kb => `
+                    <div class="faq-card">
+                        <h4 style="font-size: 0.92rem; color: #fff; margin-bottom: 0.3rem;">🏢 ${escapeHtml(kb.title)}</h4>
+                        <span class="nav-badge cyan" style="margin-bottom: 0.65rem; display: inline-block;">${escapeHtml(kb.category)}</span>
+                        <p style="font-size: 0.78rem; color: var(--text-secondary); line-height: 1.5;">${escapeHtml(kb.content)}</p>
+                    </div>
+                `).join('');
+            }
+        } catch (e) {
+            console.error('Error loading company details:', e);
+        }
+    }
+
+    async function loadCallLogs() {
+        try {
+            const res = await fetch('/api/call-logs');
+            const logs = await res.json();
+
+            if (!logsList) return;
+            if (logs.length === 0) {
+                logsList.innerHTML = '<div class="table-loading">No voice calls recorded yet.</div>';
+                return;
+            }
+
+            logsList.innerHTML = logs.map(l => `
+                <div class="log-card">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.45rem;">
+                        <span style="font-weight: 700; color: #fff;">📞 ${escapeHtml(l.caller_identifier || 'Web Caller')}</span>
+                        <span style="font-size: 0.72rem; color: var(--cyan);">${l.duration_seconds || 0}s duration</span>
+                    </div>
+                    <p style="font-size: 0.78rem; color: var(--text-secondary); line-height: 1.4;">${escapeHtml(l.summary || 'Clinical inquiry interaction.')}</p>
+                </div>
+            `).join('');
+        } catch (e) {
+            console.error('Error loading logs:', e);
+        }
+    }
+
+    // =========================================================================
+    // Modal Actions: Booking, Adding Doctor, Details
+    // =========================================================================
+    window.openDoctorBookingModal = function(doctorId) {
+        const doc = state.allDoctors.find(d => d.id === doctorId);
+        if (!doc) return;
+
+        state.selectedBookingDoctor = doc;
+        if (bookingDoctorInfo) {
+            bookingDoctorInfo.innerHTML = `
+                <strong>${doc.avatar_emoji || '🩺'} ${escapeHtml(doc.name)}</strong> — ${escapeHtml(doc.specialization)} (${escapeHtml(doc.department)})<br>
+                <span style="color: var(--cyan);">Fee: ${escapeHtml(doc.consultation_fee || '₹500')}</span> • Experience: ${doc.experience_years} yrs • Rating: ⭐ ${doc.rating}/5
+            `;
+        }
+
+        // Populate slots
+        if (bookApptSlot) {
+            bookApptSlot.innerHTML = '';
+            const rawSlots = doc.available_slots || "09:00 AM, 10:00 AM, 11:30 AM, 02:00 PM, 03:30 PM";
+            const slots = rawSlots.split(',').map(s => s.trim()).filter(Boolean);
+            slots.forEach(slot => {
+                const opt = document.createElement('option');
+                opt.value = slot;
+                opt.textContent = slot;
+                bookApptSlot.appendChild(opt);
+            });
+        }
+
+        bookDoctorModal.classList.add('show');
+    };
+
+    window.scheduleVisitForPatient = function(name, contact) {
+        if (bookPatientName) bookPatientName.value = name;
+        if (bookPatientContact) bookPatientContact.value = contact;
+        if (state.allDoctors.length > 0) {
+            window.openDoctorBookingModal(state.allDoctors[0].id);
+        } else {
+            showToast('Loading doctors...', 'info');
+            loadDoctors().then(() => {
+                if (state.allDoctors.length > 0) window.openDoctorBookingModal(state.allDoctors[0].id);
+            });
+        }
+    };
+
+    if (closeBookDoctorBtn) closeBookDoctorBtn.addEventListener('click', () => bookDoctorModal.classList.remove('show'));
+    if (cancelBookDoctorBtn) cancelBookDoctorBtn.addEventListener('click', () => bookDoctorModal.classList.remove('show'));
+
+    if (confirmBookDoctorBtn) {
+        confirmBookDoctorBtn.addEventListener('click', async () => {
+            const name = (bookPatientName ? bookPatientName.value : '').trim();
+            const contact = (bookPatientContact ? bookPatientContact.value : '').trim();
+            const dateVal = (bookApptDate ? bookApptDate.value : '').trim();
+            const slotVal = (bookApptSlot ? bookApptSlot.value : '').trim();
+            const purposeVal = (bookApptPurpose ? bookApptPurpose.value : '').trim() || 'General Consultation';
+
+            if (!name) {
+                showToast('Please enter patient name', 'error');
+                return;
+            }
+            if (!contact) {
+                showToast('Please enter contact info', 'error');
+                return;
+            }
+            if (!dateVal || !slotVal) {
+                showToast('Please select date and slot', 'error');
+                return;
+            }
+
+            const docName = state.selectedBookingDoctor ? state.selectedBookingDoctor.name : 'Dr. Arun Prakash Sharma';
+
+            try {
+                confirmBookDoctorBtn.disabled = true;
+                confirmBookDoctorBtn.textContent = 'Saving Booking...';
+
+                const res = await fetch('/api/appointments', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        visitor_name: name,
+                        contact_info: contact,
+                        staff_or_department: docName,
+                        date: dateVal,
+                        time_slot: slotVal,
+                        purpose: purposeVal
+                    })
+                });
+
+                const data = await res.json();
+                if (!res.ok) {
+                    throw new Error(data.detail || data.message || 'Booking conflict');
+                }
+
+                showToast(`Appointment successfully booked! Booking #${data.booking_id || data.id}`, 'success');
+                bookDoctorModal.classList.remove('show');
+
+                // Clear fields
+                if (bookPatientName) bookPatientName.value = '';
+                if (bookPatientContact) bookPatientContact.value = '';
+
+                // Reload data
+                loadDashboardStats();
+                loadAppointments();
+                loadPatients();
+
+            } catch (err) {
+                showToast(err.message, 'error');
+            } finally {
+                confirmBookDoctorBtn.disabled = false;
+                confirmBookDoctorBtn.textContent = '📅 Confirm Appointment';
+            }
+        });
+    }
+
+    // Admin Add New Doctor Modal
+    if (adminAddDoctorBtn) adminAddDoctorBtn.addEventListener('click', () => addDoctorModal.classList.add('show'));
+    if (quickNewDocBtn) quickNewDocBtn.addEventListener('click', () => addDoctorModal.classList.add('show'));
+    if (closeAddDoctorBtn) closeAddDoctorBtn.addEventListener('click', () => addDoctorModal.classList.remove('show'));
+    if (cancelAddDoctorBtn) cancelAddDoctorBtn.addEventListener('click', () => addDoctorModal.classList.remove('show'));
+
+    if (confirmAddDoctorBtn) {
+        confirmAddDoctorBtn.addEventListener('click', async () => {
+            const name = (newDocName ? newDocName.value : '').trim();
+            const spec = (newDocSpec ? newDocSpec.value : '').trim();
+            const dept = (newDocDept ? newDocDept.value : '').trim();
+            const qual = (newDocQual ? newDocQual.value : '').trim();
+
+            if (!name || !spec || !dept || !qual) {
+                showToast('Please fill in required fields (Name, Specialization, Dept, Qualification)', 'error');
+                return;
+            }
+
+            try {
+                confirmAddDoctorBtn.disabled = true;
+                const payload = {
+                    name,
+                    specialization: spec,
+                    department: dept,
+                    qualification: qual,
+                    experience_years: parseInt(newDocExp.value) || 5,
+                    consultation_fee: newDocFee.value || '₹800',
+                    available_days: newDocDays.value || 'Mon, Wed, Fri',
+                    available_slots: newDocSlots.value || '09:00 AM, 11:00 AM, 02:00 PM',
+                    email: newDocEmail.value || 'doctor@hrenterprises.com',
+                    phone_extension: newDocExt.value || '201',
+                    bio: newDocBio.value || '',
+                    avatar_emoji: '🩺'
+                };
+
+                const res = await fetch('/api/doctors', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Failed to register doctor');
+
+                showToast(`Doctor ${name} registered successfully!`, 'success');
+                addDoctorModal.classList.remove('show');
+
+                newDocName.value = '';
+                newDocSpec.value = '';
+                newDocDept.value = '';
+                newDocQual.value = '';
+
+                loadDashboardStats();
+                loadDoctors();
+            } catch (err) {
+                showToast(err.message, 'error');
+            } finally {
+                confirmAddDoctorBtn.disabled = false;
+            }
+        });
+    }
+
+    // Appointment Details Modal
+    window.viewAppointmentDetails = function(apptId) {
+        const appt = state.allAppointments.find(a => a.id === apptId);
+        if (!appt || !apptDetailsContent) return;
+
+        apptDetailsContent.innerHTML = `
+            <div style="display: flex; flex-direction: column; gap: 0.85rem;">
+                <div style="background: rgba(0, 240, 255, 0.06); border: 1px solid var(--border-cyan); border-radius: var(--radius-sm); padding: 0.85rem;">
+                    <div style="font-size: 0.72rem; color: var(--cyan); text-transform: uppercase; font-weight: 700;">Booking Reference</div>
+                    <div style="font-size: 1.25rem; font-weight: 800; color: #fff; font-family: var(--font-mono);">#${appt.id}</div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; font-size: 0.82rem;">
+                    <div><span style="color: var(--text-muted);">Patient Name:</span><br><strong>👤 ${escapeHtml(appt.visitor_name)}</strong></div>
+                    <div><span style="color: var(--text-muted);">Contact Phone:</span><br><strong>📞 ${escapeHtml(appt.contact_info)}</strong></div>
+                    <div><span style="color: var(--text-muted);">Consulting Doctor:</span><br><strong>🩺 ${escapeHtml(appt.staff_name)}</strong></div>
+                    <div><span style="color: var(--text-muted);">Department:</span><br><strong>🏥 ${escapeHtml(appt.department)}</strong></div>
+                    <div><span style="color: var(--text-muted);">Appointment Date:</span><br><strong>📅 ${escapeHtml(appt.date)}</strong></div>
+                    <div><span style="color: var(--text-muted);">Time Slot:</span><br><strong>⏰ ${escapeHtml(appt.time_slot)}</strong></div>
+                </div>
+                <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 0.75rem;">
+                    <span style="color: var(--text-muted); font-size: 0.74rem;">Clinical Purpose / Symptoms:</span>
+                    <p style="font-size: 0.82rem; color: #fff; margin-top: 0.2rem;">"${escapeHtml(appt.purpose || 'General Consultation')}"</p>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem;">
+                    <span style="color: var(--text-muted);">Status:</span>
+                    <span class="badge-status ${appt.status.toLowerCase()}">${escapeHtml(appt.status)}</span>
+                </div>
             </div>
         `;
-
-        // Set today's date as default
-        const today = new Date().toISOString().split('T')[0];
-        bookApptDate.value = today;
-        bookApptDate.min = today;
-
-        // Populate available slots
-        const slots = doctor.available_slots.split(',').map(s => s.trim());
-        bookApptSlot.innerHTML = slots.map(s => `<option value="${s}">${s}</option>`).join('');
-
-        // Clear form
-        bookPatientName.value = '';
-        bookPatientContact.value = '';
-        bookApptPurpose.value = '';
-
-        bookDoctorModal.classList.add('active');
+        apptDetailsModal.classList.add('show');
     };
 
-    function closeDoctorBookingModal() {
-        bookDoctorModal.classList.remove('active');
-        selectedBookingDoctor = null;
-    }
+    if (closeApptDetailsBtn) closeApptDetailsBtn.addEventListener('click', () => apptDetailsModal.classList.remove('show'));
+    if (dismissApptDetailsBtn) dismissApptDetailsBtn.addEventListener('click', () => apptDetailsModal.classList.remove('show'));
 
-    async function confirmDoctorBooking() {
-        if (!selectedBookingDoctor) return;
-
-        const patientName = bookPatientName.value.trim();
-        const contact = bookPatientContact.value.trim();
-        const dateVal = bookApptDate.value;
-        const slotVal = bookApptSlot.value;
-        const purpose = bookApptPurpose.value.trim() || `Consultation with ${selectedBookingDoctor.specialization}`;
-
-        if (!patientName) { showToast('Please enter patient name', 'warning'); return; }
-        if (!contact) { showToast('Please enter contact information', 'warning'); return; }
-        if (!dateVal) { showToast('Please select a date', 'warning'); return; }
-        if (!slotVal) { showToast('Please select a time slot', 'warning'); return; }
-
-        try {
-            const res = await fetch('/api/appointments', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    visitor_name: patientName,
-                    contact_info: contact,
-                    staff_or_department: selectedBookingDoctor.name,
-                    date: dateVal,
-                    time_slot: slotVal,
-                    purpose: purpose
-                })
-            });
-
-            if (res.ok) {
-                showToast(`Appointment booked with ${selectedBookingDoctor.name} on ${dateVal} at ${slotVal}!`, 'success');
-                closeDoctorBookingModal();
-                loadAppointments();
-                // Invalidate cache
-                doctorsCache = [];
-            } else {
-                const err = await res.json();
-                showToast(err.detail || 'Booking failed — slot may be taken', 'error');
-            }
-        } catch (e) {
-            showToast('Failed to book appointment. Please try again.', 'error');
-        }
-    }
-
-    // Global Action Helpers
-    window.cancelAppointment = async function (id) {
-        if (!confirm('Are you sure you want to cancel this appointment?')) return;
+    // Global Cancel & Complete Appointment Functions
+    window.cancelAppointment = async function(id) {
+        if (!confirm(`Are you sure you want to cancel appointment #${id}?`)) return;
         try {
             const res = await fetch(`/api/appointments/${id}`, { method: 'DELETE' });
-            if (res.ok) {
-                showToast('Appointment cancelled', 'info');
-                loadAppointments();
-            }
+            if (!res.ok) throw new Error('Cancellation failed');
+            showToast(`Appointment #${id} marked as cancelled`, 'info');
+            loadDashboardStats();
+            loadAppointments();
+            loadPatients();
         } catch (e) {
-            showToast('Failed to cancel appointment', 'error');
+            showToast(e.message, 'error');
         }
     };
 
-    window.markMessageRead = async function (id) {
+    window.markAppointmentCompleted = async function(id) {
         try {
-            const res = await fetch(`/api/messages/${id}/read`, { method: 'PATCH' });
-            if (res.ok) {
-                loadMessages();
-            }
-        } catch (e) {
-            showToast('Failed to update message', 'error');
-        }
-    };
-
-    window.deleteMessage = async function (id) {
-        try {
-            const res = await fetch(`/api/messages/${id}`, { method: 'DELETE' });
-            if (res.ok) {
-                showToast('Message deleted', 'info');
-                loadMessages();
-            }
-        } catch (e) {
-            showToast('Failed to delete message', 'error');
-        }
-    };
-
-    // =========================================================================
-    // Settings Modal
-    // =========================================================================
-
-    function openSettingsModal() {
-        apiKeyInput.value = state.apiKey;
-        voiceSelect.value = state.voice;
-        if (customWsUrlInput) customWsUrlInput.value = state.customWsUrl;
-        settingsModal.classList.add('active');
-    }
-
-    function closeSettingsModal() {
-        settingsModal.classList.remove('active');
-    }
-
-    async function saveSettings() {
-        const key = apiKeyInput.value.trim();
-        const selectedVoice = voiceSelect.value;
-        const customWs = customWsUrlInput ? customWsUrlInput.value.trim() : '';
-
-        state.apiKey = key;
-        state.voice = selectedVoice;
-        state.customWsUrl = customWs;
-        localStorage.setItem('gemini_api_key', key);
-        localStorage.setItem('receptionist_voice', selectedVoice);
-        localStorage.setItem('custom_ws_url', customWs);
-
-        if (key) {
-            await fetch('/api/config/key', {
-                method: 'POST',
+            const res = await fetch(`/api/appointments/${id}/status`, {
+                method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ api_key: key })
+                body: JSON.stringify({ status: 'Completed' })
             });
+            if (!res.ok) throw new Error('Update failed');
+            showToast(`Appointment #${id} marked as Completed`, 'success');
+            loadDashboardStats();
+            loadAppointments();
+            loadPatients();
+        } catch (e) {
+            showToast(e.message, 'error');
         }
+    };
 
-        showToast('Settings saved successfully', 'success');
-        closeSettingsModal();
+    window.removeDoctor = async function(id) {
+        if (!confirm(`Are you sure you want to delete doctor #${id} from the clinic directory?`)) return;
+        try {
+            const res = await fetch(`/api/doctors/${id}`, { method: 'DELETE' });
+            if (!res.ok) throw new Error('Failed to delete doctor');
+            showToast(`Doctor #${id} removed successfully`, 'info');
+            loadDashboardStats();
+            loadDoctors();
+        } catch (e) {
+            showToast(e.message, 'error');
+        }
+    };
+
+    window.markMessageRead = async function(id) {
+        try {
+            await fetch(`/api/messages/${id}/read`, { method: 'PATCH' });
+            loadDashboardStats();
+            loadMessages();
+        } catch (e) { }
+    };
+
+    window.markMessageReadAndOpen = async function(id) {
+        await window.markMessageRead(id);
+        notificationsDropdown.classList.remove('show');
+        switchView('messagesView');
+    };
+
+    window.deleteMessage = async function(id) {
+        if (!confirm('Delete this message?')) return;
+        try {
+            await fetch(`/api/messages/${id}`, { method: 'DELETE' });
+            showToast('Message deleted', 'info');
+            loadDashboardStats();
+            loadMessages();
+        } catch (e) { }
+    };
+
+    // Quick New Appointment Trigger
+    if (openBookApptModalBtn) openBookApptModalBtn.addEventListener('click', () => {
+        if (state.allDoctors.length > 0) window.openDoctorBookingModal(state.allDoctors[0].id);
+        else window.openDoctorBookingModal(1);
+    });
+    if (quickNewApptBtn) quickNewApptBtn.addEventListener('click', () => {
+        if (state.allDoctors.length > 0) window.openDoctorBookingModal(state.allDoctors[0].id);
+        else window.openDoctorBookingModal(1);
+    });
+    if (patientNewApptBtn) patientNewApptBtn.addEventListener('click', () => {
+        if (state.allDoctors.length > 0) window.openDoctorBookingModal(state.allDoctors[0].id);
+        else window.openDoctorBookingModal(1);
+    });
+
+    // Refresh Buttons
+    if (refreshDashboardBtn) refreshDashboardBtn.addEventListener('click', () => {
+        loadDashboardStats();
+        showToast('Dashboard metrics refreshed', 'info');
+    });
+    if (refreshApptsBtn) refreshApptsBtn.addEventListener('click', () => {
+        loadAppointments();
+        showToast('Appointments synced', 'info');
+    });
+    if (refreshDoctorsBtn) refreshDoctorsBtn.addEventListener('click', () => {
+        loadDoctors();
+        showToast('Doctors directory synced', 'info');
+    });
+    if (refreshPatientsBtn) refreshPatientsBtn.addEventListener('click', () => {
+        loadPatients();
+        showToast('Patients synced', 'info');
+    });
+    if (refreshMsgsBtn) refreshMsgsBtn.addEventListener('click', () => {
+        loadMessages();
+        showToast('Messages synced', 'info');
+    });
+    if (refreshDirectoryBtn) refreshDirectoryBtn.addEventListener('click', () => {
+        loadDirectory();
+        showToast('Directory synced', 'info');
+    });
+    if (refreshLogsBtn) refreshLogsBtn.addEventListener('click', () => {
+        loadCallLogs();
+        showToast('Call logs refreshed', 'info');
+    });
+
+    // Notifications Dropdown Toggle
+    if (notificationsBtn && notificationsDropdown) {
+        notificationsBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            notificationsDropdown.classList.toggle('show');
+        });
+        document.addEventListener('click', (e) => {
+            if (!notificationsDropdown.contains(e.target) && e.target !== notificationsBtn) {
+                notificationsDropdown.classList.remove('show');
+            }
+        });
+    }
+
+    // Global Search Bar Handler
+    if (globalSearchInput) {
+        globalSearchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                const q = globalSearchInput.value.trim();
+                if (!q) return;
+
+                // Route search based on context or switch to appointments view with search
+                switchView('appointmentsView');
+                if (apptSearchInput) {
+                    apptSearchInput.value = q;
+                    renderAppointments();
+                }
+            }
+        });
+    }
+
+    // Settings Modal Handlers
+    function openSettings() {
+        if (apiKeyInput) apiKeyInput.value = state.apiKey;
+        if (voiceSelect) voiceSelect.value = state.voice;
+        if (customWsUrlInput) customWsUrlInput.value = state.customWsUrl;
+        settingsModal.classList.add('show');
+    }
+    if (openSettingsBtn) openSettingsBtn.addEventListener('click', openSettings);
+    if (headerSettingsBtn) headerSettingsBtn.addEventListener('click', openSettings);
+    if (closeSettingsBtn) closeSettingsBtn.addEventListener('click', () => settingsModal.classList.remove('show'));
+    if (cancelSettingsBtn) cancelSettingsBtn.addEventListener('click', () => settingsModal.classList.remove('show'));
+
+    if (saveSettingsBtn) {
+        saveSettingsBtn.addEventListener('click', async () => {
+            const key = apiKeyInput.value.trim();
+            const voice = voiceSelect.value;
+            const customWs = customWsUrlInput.value.trim();
+
+            state.apiKey = key;
+            state.voice = voice;
+            state.customWsUrl = customWs;
+
+            localStorage.setItem('gemini_api_key', key);
+            localStorage.setItem('receptionist_voice', voice);
+            localStorage.setItem('custom_ws_url', customWs);
+
+            if (key) {
+                try {
+                    await fetch('/api/config/key', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ api_key: key })
+                    });
+                } catch (e) { }
+            }
+
+            settingsModal.classList.remove('show');
+            showToast('Settings saved successfully', 'success');
+        });
     }
 
     // =========================================================================
-    // UI Helpers & Toasts
+    // Utility Helpers
     // =========================================================================
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
 
     function showToast(message, type = 'info') {
-        const container = document.getElementById('toastContainer');
+        if (!toastContainer) return;
         const toast = document.createElement('div');
-        toast.className = 'toast';
-        const icon = type === 'error' ? '❌' : (type === 'success' ? '✅' : (type === 'warning' ? '⚠️' : 'ℹ️'));
+        toast.className = `toast ${type}`;
+        const icon = type === 'error' ? '⚠️' : (type === 'success' ? '✅' : 'ℹ️');
         toast.innerHTML = `<span>${icon}</span> <span>${escapeHtml(message)}</span>`;
-        container.appendChild(toast);
-
+        toastContainer.appendChild(toast);
         setTimeout(() => {
             toast.style.opacity = '0';
+            toast.style.transform = 'translateY(-10px)';
+            toast.style.transition = 'all 0.3s ease';
             setTimeout(() => toast.remove(), 300);
         }, 3500);
     }
 
-    function escapeHtml(str) {
-        if (!str) return '';
-        return String(str)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;');
-    }
-
     // =========================================================================
-    // Event Listeners
+    // Initial Application Boot
     // =========================================================================
-
-    startCallBtn.addEventListener('click', startVoiceCall);
-    endCallBtn.addEventListener('click', endVoiceCall);
-    muteBtn.addEventListener('click', toggleMute);
-
-    sendChatBtn.addEventListener('click', () => sendTextMessage(chatInput.value));
-    chatInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-            sendTextMessage(chatInput.value);
-        }
-    });
-
-    // Quick Voice Mic Button: One-click Start / Toggle voice interaction
-    const micVoiceBtn = document.getElementById('micVoiceBtn');
-    if (micVoiceBtn) {
-        micVoiceBtn.addEventListener('click', () => {
-            if (state.isCallActive) {
-                toggleMute();
-            } else {
-                startVoiceCall();
-            }
-        });
-    }
-
-    // Quick suggestion prompt pills
-    document.querySelectorAll('.prompt-pill').forEach(pill => {
-        pill.addEventListener('click', () => {
-            const prompt = pill.getAttribute('data-prompt');
-            chatInput.value = prompt;
-            sendTextMessage(prompt);
-        });
-    });
-
-    // Tab Navigation
-    tabBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            const target = btn.getAttribute('data-tab');
-            tabBtns.forEach(b => b.classList.remove('active'));
-            tabPanes.forEach(p => p.classList.remove('active'));
-
-            btn.classList.add('active');
-            document.getElementById(target).classList.add('active');
-
-            if (target === 'appointmentsTab') loadAppointments();
-            else if (target === 'doctorsTab') loadDoctors();
-            else if (target === 'messagesTab') loadMessages();
-            else if (target === 'directoryTab') loadDirectory();
-            else if (target === 'logsTab') loadCallLogs();
-        });
-    });
-
-    // Refresh Buttons
-    document.getElementById('refreshApptsBtn')?.addEventListener('click', loadAppointments);
-    document.getElementById('refreshMsgsBtn')?.addEventListener('click', loadMessages);
-    document.getElementById('refreshLogsBtn')?.addEventListener('click', loadCallLogs);
-    document.getElementById('refreshDoctorsBtn')?.addEventListener('click', () => loadDoctors());
-
-    // Directory Search
-    directorySearchInput.addEventListener('input', (e) => {
-        loadDirectory(e.target.value);
-    });
-
-    // Doctor Search & Filter
-    doctorSearchInput.addEventListener('input', (e) => {
-        loadDoctors(e.target.value, doctorSpecFilter.value);
-    });
-    doctorSpecFilter.addEventListener('change', () => {
-        loadDoctors(doctorSearchInput.value, doctorSpecFilter.value);
-    });
-
-    // Doctor Booking Modal
-    closeBookDoctorBtn.addEventListener('click', closeDoctorBookingModal);
-    cancelBookDoctorBtn.addEventListener('click', closeDoctorBookingModal);
-    confirmBookDoctorBtn.addEventListener('click', confirmDoctorBooking);
-
-    // Settings Modal
-    openSettingsBtn.addEventListener('click', openSettingsModal);
-    closeSettingsBtn.addEventListener('click', closeSettingsModal);
-    cancelSettingsBtn.addEventListener('click', closeSettingsModal);
-    saveSettingsBtn.addEventListener('click', saveSettings);
-
-    // Initial Data Fetch
-    loadCompanyDetails();
+    loadDashboardStats();
     loadAppointments();
+    loadDoctors();
+    loadPatients();
     loadMessages();
     loadDirectory();
-    loadDoctors();
-    loadSpecializations();
+    loadCompanyDetails();
 });
