@@ -2101,19 +2101,44 @@ document.addEventListener('DOMContentLoaded', () => {
                 authResendBtn.disabled = true;
             }
 
-            const res = await fetch('/api/auth/send-otp', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    identifier: identifier,
-                    channel: state.authChannel
-                })
-            });
+            let res, data;
+            try {
+                res = await fetch('/api/auth/send-otp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        identifier: identifier,
+                        channel: state.authChannel
+                    })
+                });
+            } catch (networkErr) {
+                throw new Error('Cannot reach the server. Please check your connection.');
+            }
 
-            const data = await res.json();
+            // Parse JSON response
+            try {
+                data = await res.json();
+            } catch (parseErr) {
+                throw new Error(`Server error (HTTP ${res.status}). Please try again.`);
+            }
 
+            // Handle specific HTTP errors with meaningful messages
             if (!res.ok) {
-                throw new Error(data.detail || 'Failed to dispatch verification code');
+                if (res.status === 404) {
+                    throw new Error('Authentication service not found. Please refresh the page and try again.');
+                } else if (res.status === 422) {
+                    const detail = data.detail;
+                    if (Array.isArray(detail)) {
+                        throw new Error(detail.map(d => d.msg || d.message).join('. '));
+                    }
+                    throw new Error(typeof detail === 'string' ? detail : 'Invalid input. Please check your email or phone number.');
+                } else if (res.status === 429) {
+                    throw new Error('Too many OTP requests. Please wait a moment before trying again.');
+                } else if (res.status === 500) {
+                    throw new Error('A server error occurred. Please try again in a moment.');
+                } else {
+                    throw new Error(data.detail || data.message || `Request failed (HTTP ${res.status}).`);
+                }
             }
 
             state.authIdentifier = identifier;
@@ -2230,20 +2255,41 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const userName = (authNameInput ? authNameInput.value.trim() : '') || null;
 
-            const res = await fetch('/api/auth/verify-otp', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    identifier: state.authIdentifier,
-                    otp: fullOtp,
-                    name: userName
-                })
-            });
+            let res, data;
+            try {
+                res = await fetch('/api/auth/verify-otp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        identifier: state.authIdentifier,
+                        otp: fullOtp,
+                        name: userName
+                    })
+                });
+            } catch (networkErr) {
+                throw new Error('Cannot reach the server. Please check your connection.');
+            }
 
-            const data = await res.json();
+            try {
+                data = await res.json();
+            } catch (parseErr) {
+                throw new Error(`Server error (HTTP ${res.status}). Please try again.`);
+            }
 
             if (!res.ok) {
-                throw new Error(data.detail || 'Verification failed. Please check your code.');
+                if (res.status === 404) {
+                    throw new Error('Verification service not found. Please refresh the page.');
+                } else if (res.status === 422) {
+                    const detail = data.detail;
+                    if (Array.isArray(detail)) {
+                        throw new Error(detail.map(d => d.msg || d.message).join('. '));
+                    }
+                    throw new Error(typeof detail === 'string' ? detail : 'Invalid verification code format.');
+                } else if (res.status === 500) {
+                    throw new Error('A server error occurred during verification. Please try again.');
+                } else {
+                    throw new Error(data.detail || data.message || 'Verification failed. Please check your code.');
+                }
             }
 
             // Stop timer
@@ -2266,12 +2312,14 @@ document.addEventListener('DOMContentLoaded', () => {
             }, 600);
         } catch (err) {
             showAuthAlert(err.message, 'error');
-            // Clear inputs for re-entry
-            otpDigitBoxes.forEach(b => {
-                b.value = '';
-                b.classList.remove('filled');
-            });
-            if (otpDigitBoxes[0]) otpDigitBoxes[0].focus();
+            // Only clear inputs on wrong code, not on network errors
+            if (!err.message.includes('server') && !err.message.includes('reach')) {
+                otpDigitBoxes.forEach(b => {
+                    b.value = '';
+                    b.classList.remove('filled');
+                });
+                if (otpDigitBoxes[0]) otpDigitBoxes[0].focus();
+            }
         } finally {
             if (verifyOtpBtn) {
                 verifyOtpBtn.disabled = false;

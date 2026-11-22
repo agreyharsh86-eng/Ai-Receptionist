@@ -4,6 +4,7 @@ Handles OTP dispatch, OTP verification, user profile lookup, and session managem
 """
 import re
 import logging
+from datetime import datetime, timezone, timedelta
 from typing import Optional, Literal
 from pydantic import BaseModel, Field, validator
 from fastapi import APIRouter, HTTPException, Depends, status
@@ -99,11 +100,12 @@ async def send_otp(request: SendOtpRequest):
     otp = generate_otp()
     hashed = hash_otp(otp)
 
-    # Persist in MongoDB with TTL index
+    # Persist in MongoDB with TTL — compute expires_at here and pass the datetime object
+    expires_at = datetime.now(timezone.utc) + timedelta(seconds=config.OTP_EXPIRE_SECONDS)
     await save_otp_verification(
         identifier=identifier,
         hashed_otp=hashed,
-        expires_in_seconds=config.OTP_EXPIRE_SECONDS
+        expires_at=expires_at
     )
 
     # Dispatch via Email or SMS provider (with console fallback in dev)

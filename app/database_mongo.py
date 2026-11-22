@@ -89,11 +89,18 @@ def get_mongo_db():
 async def save_otp_verification(
     identifier: str,
     hashed_otp: str,
-    expires_at: datetime
+    expires_at: datetime = None,
+    expires_in_seconds: int = None
 ) -> Dict[str, Any]:
     """Store hashed OTP with expiration timestamp and zero attempts."""
     clean_id = identifier.strip().lower()
     now = datetime.now(timezone.utc)
+
+    # Resolve expires_at: accept either an explicit datetime or a seconds offset
+    if expires_at is None and expires_in_seconds is not None:
+        expires_at = now + timedelta(seconds=expires_in_seconds)
+    elif expires_at is None:
+        expires_at = now + timedelta(seconds=30)  # default 30s
 
     record = {
         "identifier": clean_id,
