@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ company_name | default('HR Enterprises') }} — JACK AI Receptionist & Healthcare SaaS</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body class="dashboard-body">
+    <!-- App Layout: Sidebar + Main Content -->
+    <div class="app-layout">
+
+        <!-- ===================================================================
+             1. Left Sidebar Navigation (Dark Navy)
+             =================================================================== -->
+        <aside class="app-sidebar" id="appSidebar">
+            <!-- Brand Section -->
+            <div class="sidebar-brand">
+                <div class="brand-logo-icon">
+                    <span class="logo-symbol">⚡</span>
+                </div>
+                <div class="brand-info">
+                    <h2 class="brand-title" id="companyHeaderTitle">{{ company_name | default('HR Enterprises') }}</h2>
+                    <span class="brand-badge">JACK AI Receptionist</span>
+                </div>
+            </div>
+
+            <!-- Navigation Links -->
+            <nav class="sidebar-nav">
+                <div class="nav-group-label">Core Management</div>
+                <button class="nav-item active" data-view="dashboardView">
+                    <span class="nav-icon">📊</span>
+                    <span class="nav-label">Dashboard</span>
+                </button>
+                <button class="nav-item" data-view="appointmentsView">
+                    <span class="nav-icon">📅</span>
+                    <span class="nav-label">Appointments</span>
+                    <span class="nav-badge" id="sidebarApptBadge">0</span>
+                </button>
+                <button class="nav-item" data-view="doctorsView">
+                    <span class="nav-icon">🩺</span>
+                    <span class="nav-label">Doctors</span>
+                    <span class="nav-badge cyan" id="sidebarDoctorBadge">0</span>
+                </button>
+                <button class="nav-item" data-view="patientsView">
+                    <span class="nav-icon">👥</span>
+                    <span class="nav-label">Patients</span>
+                    <span class="nav-badge" id="sidebarPatientBadge">0</span>
+                </button>
+                <button class="nav-item" data-view="callHistoryView">
+                    <span class="nav-icon">📞</span>
+                    <span class="nav-label">Call History</span>
+                    <span class="nav-badge rose" id="sidebarCallBadge">0</span>
+                </button>
+                <button class="nav-item" data-view="analyticsView">
+                    <span class="nav-icon">📈</span>
+                    <span class="nav-label">Analytics</span>
+                </button>
+
+                <div class="nav-group-label">Administration</div>
+                <button class="nav-item" data-view="settingsView">
+                    <span class="nav-icon">⚙️</span>
+                    <span class="nav-label">Settings</span>
+                </button>
+                <button class="nav-item" id="sidebarLogoutNavBtn">
+                    <span class="nav-icon">🚪</span>
+                    <span class="nav-label">Logout</span>
+                </button>
+            </nav>
+
+            <!-- Sidebar Bottom: Jack AI Status & User -->
+            <div class="sidebar-footer">
+                <div class="ai-status-card" id="sidebarAiStatusCard">
+                    <div class="ai-status-indicator">
+                        <span class="pulse-ring"></span>
+                        <span class="status-orb"></span>
+                    </div>
+                    <div class="ai-status-info">
+                        <span class="ai-name">Jack AI Assistant</span>
+                        <span class="ai-state" id="sidebarAiState">Online & Ready</span>
+                    </div>
+                    <button class="btn-talk-quick" id="quickTalkBtn" title="Open Jack AI Assistant">🎙️</button>
+                </div>
+
+                <div class="user-profile-bar" id="sidebarUserProfileBar">
+                    <div class="user-avatar" id="sidebarUserAvatar">👨‍💼</div>
+                    <div class="user-details" id="sidebarUserDetails">
+                        <span class="user-name" id="sidebarUserName">Dr. Administrator</span>
+                        <span class="user-role" id="sidebarUserRole">Super Admin • Clinic</span>
+                    </div>
+                    <div class="user-actions-btns">
+                        <button class="btn-icon-subtle" id="sidebarAuthActionBtn" title="Sign In / Switch Account">🔐</button>
+                        <button class="btn-icon-subtle" id="openSettingsBtn" title="System Settings">⚙️</button>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Sidebar Overlay for Mobile -->
+        <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+        <!-- ===================================================================
+             2. Main Content Container (Clean White / Light Grey)
+             =================================================================== -->
+        <div class="main-wrapper">
+            <!-- Top Header Bar -->
+            <header class="dashboard-topbar">
+                <div class="topbar-left">
+                    <button class="btn-menu-toggle" id="mobileMenuToggle" title="Toggle Sidebar">☰</button>
+                    <div class="topbar-title-group">
+                        <h1 class="page-main-heading" id="currentPageTitle">Dashboard Overview</h1>
+                        <p class="page-sub-heading" id="currentPageSubtitle">Real-time healthcare operations, clinical appointments & intelligent AI concierge</p>
+                    </div>
+                </div>
+
+                <div class="topbar-right">
+                    <!-- Global Search -->
+                    <div class="topbar-search-box">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" id="globalSearchInput" placeholder="Search appointments, patients..." aria-label="Global Search">
+                    </div>
+
+                    <!-- System Clock & Date -->
+                    <div class="clock-chip">
+                        <span>🕒</span>
+                        <span id="systemClock">--:--:--</span>
+                    </div>
+
+                    <!-- System Status Pill -->
+                    <div class="connection-pill" id="connectionPill">
+                        <span class="status-dot"></span>
+                        <span id="connectionText">Operational</span>
+                    </div>
+
+                    <!-- Notifications Dropdown Trigger -->
+                    <div class="notification-wrapper">
+                        <button class="btn-topbar-icon" id="notificationsBtn" title="Recent Notifications">
+                            <span>🔔</span>
+                            <span class="notif-badge" id="notifBadge"></span>
+                        </button>
+                        <!-- Dropdown Menu -->
+                        <div class="notifications-dropdown" id="notificationsDropdown">
+                            <div class="notif-header">
+                                <h4>Notifications & Inquiries</h4>
+                                <span class="notif-count-tag" id="notifDropdownCount">0 Unread</span>
+                            </div>
+                            <div class="notif-list" id="notifDropdownList">
+                                <div class="notif-empty">No unread notifications.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- User Profile & Auth Pill -->
+                    <button class="user-topbar-pill" id="topbarUserPill" title="Account & Authentication">
+                        <span class="user-pill-avatar" id="topbarUserAvatar">👤</span>
+                        <div class="user-pill-info">
+                            <span class="user-pill-name" id="topbarUserName">Sign In</span>
+                            <span class="user-pill-status" id="topbarUserStatus">Guest</span>
+                        </div>
+                    </button>
+
+                    <!-- Header Settings Shortcut -->
+                    <button class="btn-topbar-icon" id="headerSettingsBtn" title="Settings">⚙️</button>
+                </div>
+            </header>
+
+            <!-- Dashboard Content Container (Holds All Views) -->
+            <main class="dashboard-content" id="dashboardContent">
+
+                <!-- ===============================================================
+                     VIEW 1: Dashboard Overview
+                     =============================================================== -->
+                <section class="view-panel active" id="dashboardView">
+                    <!-- Hero Welcome Banner -->
+                    <div class="dashboard-hero-banner">
+                        <div class="hero-text">
+                            <h2>Welcome to {{ company_name | default('HR Enterprises') }} Medical Center</h2>
+                            <p>Jack AI Receptionist is actively managing patient bookings, inquiries, and clinical routing.</p>
+                        </div>
+                        <div class="hero-actions">
+                            <button class="btn-primary" id="quickNewApptBtn">📅 Schedule Appointment</button>
+                            <button class="btn-secondary" id="heroTalkJackBtn" style="background: rgba(255,255,255,0.1); color: #fff; border-color: rgba(255,255,255,0.2);">🎙️ Talk to Jack</button>
+                        </div>
+                    </div>
+
+                    <!-- 4 Summary Stat Cards -->
+                    <div class="stat-cards-grid">
+                        <!-- Stat 1: Total Appointments -->
+                        <div class="stat-card">
+                            <div class="stat-card-header">
+                                <span class="stat-label">Total Appointments</span>
+                                <div class="stat-icon-badge stat-icon-blue">📅</div>
+                            </div>
+                            <div class="stat-value" id="statTotalAppts">0</div>
+                            <div class="stat-footer">
+                                <span class="stat-trend-up">↑ Active</span>
+                                <span>Verified hospital visits</span>
+                            </div>
+                        </div>
+
+                        <!-- Stat 2: Today's Appointments -->
+                        <div class="stat-card">
+                            <div class="stat-card-header">
+                                <span class="stat-label">Today's Schedule</span>
+                                <div class="stat-icon-badge stat-icon-emerald">🕒</div>
+                            </div>
+                            <div class="stat-value" id="statTodayAppts">0</div>
+                            <div class="stat-footer">
+                                <span class="stat-trend-up">● Scheduled</span>
+                                <span id="currentDateDisplay">Today</span>
+                            </div>
+                        </div>
+
+                        <!-- Stat 3: Registered Patients -->
+                        <div class="stat-card">
+                            <div class="stat-card-header">
+                                <span class="stat-label">Registered Patients</span>
+                                <div class="stat-icon-badge stat-icon-purple">👥</div>
+                            </div>
+                            <div class="stat-value" id="statTotalPatients">0</div>
+                            <div class="stat-footer">
+                                <span>Unique patient records</span>
+                            </div>
+                        </div>
+
+                        <!-- Stat 4: Available Doctors -->
+                        <div class="stat-card">
+                            <div class="stat-card-header">
+                                <span class="stat-label">Available Doctors</span>
+                                <div class="stat-icon-badge stat-icon-amber">🩺</div>
+                            </div>
+                            <div class="stat-value" id="statAvailableDocs">0</div>
+                            <div class="stat-footer">
+                                <span id="statTotalDocsSub">0 specialists on duty</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Action Bar -->
+                    <div class="quick-action-strip">
+                        <div class="strip-label">
+                            <span>⚡</span>
+                            <span>Quick Operational Actions:</span>
+                        </div>
+                        <div class="strip-buttons">
+                            <button class="btn-primary btn-sm" id="stripNewApptBtn">📅 New Appointment</button>
+                            <button class="btn-secondary btn-sm" id="stripNewDocBtn">
+                                <span>🩺 Register Doctor</span>
+                                <span class="badge-admin-pill">Admin</span>
+                            </button>
+                            <button class="btn-secondary btn-sm" id="stripTalkJackBtn">🎙️ Talk to Jack AI</button>
+                            <button class="btn-secondary btn-sm" id="stripViewAnalyticsBtn">📈 View Analytics</button>
+                            <button class="btn-icon-only" id="refreshDashboardBtn" title="Refresh Live Data">🔄</button>
+                        </div>
+                    </div>
+
+                    <!-- Dashboard Two Column Grid -->
+                    <div class="dashboard-grid-2col">
+                        <!-- Left: Recent Appointments Table -->
+                        <div class="panel-card">
+                            <div class="panel-card-header">
+                                <h3><span>📅</span> Recent Appointments</h3>
+                                <a href="javascript:void(0)" class="panel-link" id="viewAllApptsLink">View All →</a>
+                            </div>
+                            <div class="table-container">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Patient</th>
+                                            <th>Doctor & Dept</th>
+                                            <th>Date & Time</th>
+                                            <th>Status</th>
+                                            <th>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="dashboardApptsTbody">
+                                        <!-- Injected via JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Right: Recent Caller Activity -->
+                        <div class="panel-card">
+                            <div class="panel-card-header">
+                                <h3><span>📞</span> Recent Caller Activity</h3>
+                                <a href="javascript:void(0)" class="panel-link" id="viewAllCallsLink">View All →</a>
+                            </div>
+                            <div class="panel-card-body" id="dashboardCallsMini" style="display: flex; flex-direction: column; gap: 0.75rem;">
+                                <!-- Injected via JS -->
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ===============================================================
+                     VIEW 2: Appointments
+                     =============================================================== -->
+                <section class="view-panel" id="appointmentsView">
+                    <div class="section-header-row">
+                        <div class="section-header-left">
+                            <h2><span>📅</span> Clinical Appointment Management</h2>
+                            <p>Track, verify, schedule and manage patient bookings across all departments</p>
+                        </div>
+                        <div class="section-actions-right">
+                            <button class="btn-primary" id="openBookApptModalBtn">📅 Schedule Appointment</button>
+                            <button class="btn-secondary btn-icon-only" id="refreshApptsBtn" title="Refresh Appointments">🔄</button>
+                        </div>
+                    </div>
+
+                    <!-- Controls Bar -->
+                    <div class="controls-bar">
+                        <div class="filter-tabs-group" id="apptFilterGroup">
+                            <button class="filter-tab-btn active" data-filter="all">All (<span id="countFilterAll">0</span>)</button>
+                            <button class="filter-tab-btn" data-filter="today">Today (<span id="countFilterToday">0</span>)</button>
+                            <button class="filter-tab-btn" data-filter="upcoming">Upcoming (<span id="countFilterUpcoming">0</span>)</button>
+                            <button class="filter-tab-btn" data-filter="completed">Completed (<span id="countFilterCompleted">0</span>)</button>
+                            <button class="filter-tab-btn" data-filter="cancelled">Cancelled (<span id="countFilterCancelled">0</span>)</button>
+                        </div>
+
+                        <div class="search-field-wrapper">
+                            <span class="search-icon">🔍</span>
+                            <input type="text" id="apptSearchInput" placeholder="Filter by patient name, doctor..." aria-label="Search appointments">
+                        </div>
+                    </div>
+
+                    <!-- Appointments Table Container -->
+                    <div class="panel-card">
+                        <div class="table-container">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Patient Details</th>
+                                        <th>Doctor & Department</th>
+                                        <th>Date & Slot</th>
+                                        <th>Consultation Purpose</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="appointmentsList">
+                                    <!-- Injected via JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ===============================================================
+                     VIEW 3: Doctors
+                     =============================================================== -->
+                <section class="view-panel" id="doctorsView">
+                    <div class="section-header-row">
+                        <div class="section-header-left">
+                            <h2><span>🩺</span> Doctors & Specialists Directory</h2>
+                            <p>Consulting medical faculty, clinical schedules, consultation fees and real-time availability</p>
+                        </div>
+                        <div class="section-actions-right">
+                            <button class="btn-primary" id="adminAddDoctorBtn">
+                                <span>🩺 Register Doctor</span>
+                                <span class="badge-admin-pill">Admin</span>
+                            </button>
+                            <button class="btn-secondary btn-icon-only" id="refreshDoctorsBtn" title="Refresh Doctors">🔄</button>
+                        </div>
+                    </div>
+
+                    <!-- Controls Bar -->
+                    <div class="controls-bar">
+                        <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+                            <div class="search-field-wrapper">
+                                <span class="search-icon">🔍</span>
+                                <input type="text" id="doctorSearchInput" placeholder="Search doctor by name or specialty...">
+                            </div>
+
+                            <select id="doctorSpecFilter" class="form-select" style="width: auto; padding: 0.45rem 1.75rem 0.45rem 0.85rem; font-size: 0.82rem;">
+                                <option value="all">All Specializations</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Doctors Cards Grid -->
+                    <div class="doctors-grid" id="doctorsList">
+                        <!-- Injected via JS -->
+                    </div>
+                </section>
+
+                <!-- ===============================================================
+                     VIEW 4: Patients
+                     =============================================================== -->
+                <section class="view-panel" id="patientsView">
+                    <div class="section-header-row">
+                        <div class="section-header-left">
+                            <h2><span>👥</span> Registered Patients Registry</h2>
+                            <p>Patient contact details, historical consultations, and rapid appointment scheduling</p>
+                        </div>
+                        <div class="section-actions-right">
+                            <button class="btn-primary" id="patientNewApptBtn">📅 Book for Patient</button>
+                            <button class="btn-secondary btn-icon-only" id="refreshPatientsBtn" title="Refresh Patients">🔄</button>
+                        </div>
+                    </div>
+
+                    <!-- Controls Bar -->
+                    <div class="controls-bar">
+                        <div class="search-field-wrapper">
+                            <span class="search-icon">🔍</span>
+                            <input type="text" id="patientSearchInput" placeholder="Search patient by name or contact number...">
+                        </div>
+                    </div>
+
+                    <!-- Patients Table -->
+                    <div class="panel-card">
+                        <div class="table-container">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Patient Name</th>
+                                        <th>Contact Info</th>
+                                        <th>Total Bookings</th>
+                                        <th>Last Consulted Doctor</th>
+                                        <th>Last Visit Date</th>
+                                        <th>Last Status</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="patientsList">
+                                    <!-- Injected via JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ===============================================================
+                     VIEW 5: Call History
+                     =============================================================== -->
+                <section class="view-panel" id="callHistoryView">
+                    <div class="section-header-row">
+                        <div class="section-header-left">
+                            <h2><span>📞</span> Receptionist Call History & Messages</h2>
+                            <p>Comprehensive record of live AI voice interactions, telephone caller notes, and voicemails</p>
+                        </div>
+                        <div class="section-actions-right">
+                            <button class="btn-secondary btn-icon-only" id="refreshCallsBtn" title="Refresh Call History">🔄</button>
+                        </div>
+                    </div>
+
+                    <!-- Controls Bar -->
+                    <div class="controls-bar">
+                        <div class="filter-tabs-group" id="callHistoryFilterGroup">
+                            <button class="filter-tab-btn active" data-call-filter="all">All Interactions (<span id="countCallsAll">0</span>)</button>
+                            <button class="filter-tab-btn" data-call-filter="voice">Voice Calls (<span id="countCallsVoice">0</span>)</button>
+                            <button class="filter-tab-btn" data-call-filter="messages">Voicemails/Notes (<span id="countCallsMsg">0</span>)</button>
+                            <button class="filter-tab-btn" data-call-filter="urgent">Urgent (<span id="countCallsUrgent">0</span>)</button>
+                        </div>
+
+                        <div class="search-field-wrapper">
+                            <span class="search-icon">🔍</span>
+                            <input type="text" id="callSearchInput" placeholder="Search by caller, number, summary...">
+                        </div>
+                    </div>
+
+                    <!-- Call History Cards List -->
+                    <div class="call-history-list" id="callHistoryList">
+                        <!-- Injected via JS -->
+                    </div>
+                </section>
+
+                <!-- ===============================================================
+                     VIEW 6: Analytics
+                     =============================================================== -->
+                <section class="view-panel" id="analyticsView">
+                    <div class="section-header-row">
+                        <div class="section-header-left">
+                            <h2><span>📈</span> Clinical Operations & AI Analytics</h2>
+                            <p>Performance metrics, department distributions, doctor utilization, and AI receptionist efficiency</p>
+                        </div>
+                        <div class="section-actions-right">
+                            <button class="btn-secondary btn-icon-only" id="refreshAnalyticsBtn" title="Refresh Analytics">🔄</button>
+                        </div>
+                    </div>
+
+                    <!-- KPI Cards Row -->
+                    <div class="stat-cards-grid">
+                        <div class="stat-card">
+                            <div class="stat-card-header">
+                                <span class="stat-label">AI First-Call Resolution</span>
+                                <div class="stat-icon-badge stat-icon-emerald">🎯</div>
+                            </div>
+                            <div class="stat-value" id="kpiResolutionRate">92.4%</div>
+                            <div class="stat-footer">
+                                <span class="stat-trend-up">↑ 3.2%</span>
+                                <span>Directly resolved by Jack</span>
+                            </div>
+                        </div>
+
+                        <div class="stat-card">
+                            <div class="stat-card-header">
+                                <span class="stat-label">Avg Call Duration</span>
+                                <div class="stat-icon-badge stat-icon-blue">⏱️</div>
+                            </div>
+                            <div class="stat-value" id="kpiAvgDuration">45s</div>
+                            <div class="stat-footer">
+                                <span>Fast appointment booking</span>
+                            </div>
+                        </div>
+
+                        <div class="stat-card">
+                            <div class="stat-card-header">
+                                <span class="stat-label">Doctor Utilization</span>
+                                <div class="stat-icon-badge stat-icon-purple">🩺</div>
+                            </div>
+                            <div class="stat-value" id="kpiDocUtilization">94.2%</div>
+                            <div class="stat-footer">
+                                <span class="stat-trend-up">Optimal</span>
+                                <span>Consultation slot fill rate</span>
+                            </div>
+                        </div>
+
+                        <div class="stat-card">
+                            <div class="stat-card-header">
+                                <span class="stat-label">AI Handled Rate</span>
+                                <div class="stat-icon-badge stat-icon-amber">⚡</div>
+                            </div>
+                            <div class="stat-value" id="kpiAiHandled">88.6%</div>
+                            <div class="stat-footer">
+                                <span>Zero human transfer needed</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Analytics Visual Bars Grid -->
+                    <div class="analytics-grid">
+                        <!-- Card 1: Department Breakdown -->
+                        <div class="panel-card">
+                            <div class="panel-card-header">
+                                <h3><span>🏥</span> Appointments by Department</h3>
+                            </div>
+                            <div class="panel-card-body" id="analyticsDeptBars">
+                                <!-- Injected via JS -->
+                            </div>
+                        </div>
+
+                        <!-- Card 2: Appointment Status Distribution -->
+                        <div class="panel-card">
+                            <div class="panel-card-header">
+                                <h3><span>📊</span> Appointment Status Breakdown</h3>
+                            </div>
+                            <div class="panel-card-body" id="analyticsStatusBars">
+                                <!-- Injected via JS -->
+                            </div>
+                        </div>
+
+                        <!-- Card 3: 7-Day Recent Trends -->
+                        <div class="panel-card">
+                            <div class="panel-card-header">
+                                <h3><span>📅</span> 7-Day Booking Volume Trend</h3>
+                            </div>
+                            <div class="panel-card-body" id="analyticsDailyTrend">
+                                <!-- Injected via JS -->
+                            </div>
+                        </div>
+
+                        <!-- Card 4: Doctor Workload Distribution -->
+                        <div class="panel-card">
+                            <div class="panel-card-header">
+                                <h3><span>🩺</span> Specialist Workload Distribution</h3>
+                            </div>
+                            <div class="panel-card-body" id="analyticsDocLoad">
+                                <!-- Injected via JS -->
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ===============================================================
+                     VIEW 7: Settings
+                     =============================================================== -->
+                <section class="view-panel" id="settingsView">
+                    <div class="section-header-row">
+                        <div class="section-header-left">
+                            <h2><span>⚙️</span> System & Voice Assistant Configuration</h2>
+                            <p>Configure Gemini Live AI parameters, voice personas, operating hours, and security settings</p>
+                        </div>
+                    </div>
+
+                    <div class="panel-card" style="max-width: 800px;">
+                        <div class="panel-card-body">
+                            <h3 style="font-size: 1rem; font-weight: 800; margin-bottom: 1rem; color: var(--text-heading);">Voice Assistant & AI Parameters</h3>
+
+                            <div class="form-group">
+                                <label for="settingsApiKeyInput">Google Gemini API Key</label>
+                                <input type="password" id="settingsApiKeyInput" class="form-input" placeholder="AIzaSy...">
+                                <p class="form-help">Enables real-time bidirectional Gemini Live streaming audio and natural language clinical intelligence.</p>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="settingsVoiceSelect">Receptionist Voice Persona</label>
+                                    <select id="settingsVoiceSelect" class="form-select">
+                                        <option value="Aoede">Aoede (Warm, Sophisticated, Poised - Female)</option>
+                                        <option value="Puck">Puck (Energetic, Friendly, Bright - Male)</option>
+                                        <option value="Charon">Charon (Calm, Professional, Deep - Male)</option>
+                                        <option value="Fenrir">Fenrir (Authoritative, Crisp - Male)</option>
+                                        <option value="Kore">Kore (Gentle, Courteous - Female)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="settingsLiveModel">Live API Model</label>
+                                    <input type="text" id="settingsLiveModel" class="form-input" value="{{ live_model | default('gemini-3.1-flash-live-preview') }}" disabled>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="settingsCustomWs">Custom WebSocket Proxy URL (Optional)</label>
+                                <input type="text" id="settingsCustomWs" class="form-input" placeholder="e.g. wss://your-backend.onrender.com/ws/live">
+                                <p class="form-help">Leave blank to use default server host WebSocket.</p>
+                            </div>
+
+                            <div style="margin-top: 1.5rem; display: flex; gap: 0.75rem;">
+                                <button class="btn-primary" id="saveMainSettingsBtn">Save Configuration</button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- ===================================================================
+         Floating Jack AI Voice & Chat Assistant (Bottom-Right)
+         =================================================================== -->
+    <button class="floating-assistant-btn" id="quickTriggerJackBtn" title="Open Jack AI Assistant">
+        <span class="assistant-btn-orb"></span>
+        <span>🎙️ Talk to Jack</span>
+    </button>
+
+    <div class="floating-assistant-window" id="floatingAssistantWindow">
+        <!-- Assistant Header -->
+        <div class="assistant-header">
+            <div class="assistant-header-left">
+                <div class="assistant-header-avatar">⚡</div>
+                <div class="assistant-title-box">
+                    <h4>Jack — AI Receptionist</h4>
+                    <span class="assistant-status-tag">
+                        <span class="status-dot"></span>
+                        <span id="floatingAiStatusText">Online & Ready</span>
+                    </span>
+                </div>
+            </div>
+            <button class="btn-close-assistant" id="closeFloatingAssistantBtn" title="Minimize Assistant">✕</button>
+        </div>
+
+        <!-- Audio Visualizer Strip -->
+        <div class="assistant-visualizer-bar">
+            <div class="visualizer-waves" id="visualizerWaves">
+                <div class="wave-bar"></div>
+                <div class="wave-bar"></div>
+                <div class="wave-bar"></div>
+                <div class="wave-bar"></div>
+                <div class="wave-bar"></div>
+            </div>
+            <span class="assistant-voice-state" id="assistantVoiceState">Tap mic to speak</span>
+        </div>
+
+        <!-- Chat Stream -->
+        <div class="assistant-chat-stream" id="assistantChatStream">
+            <div class="chat-bubble jack">
+                Hello! I'm <strong>Jack</strong>, your AI Medical Receptionist. I can help you find specialist doctors, check real-time availability, and schedule your appointment. How can I assist you today?
+            </div>
+        </div>
+
+        <!-- Suggested Prompt Chips -->
+        <div class="assistant-quick-prompts">
+            <button class="prompt-chip" data-prompt="I want to book an appointment">📅 Book appointment</button>
+            <button class="prompt-chip" data-prompt="Who are the available doctors today?">🩺 Available doctors</button>
+            <button class="prompt-chip" data-prompt="What are clinic operating hours?">⏰ Clinic hours</button>
+        </div>
+
+        <!-- Input Tray -->
+        <div class="assistant-input-tray">
+            <input type="text" id="assistantTextInput" placeholder="Type a message or click mic...">
+            <button class="btn-mic-toggle" id="startVoiceCallBtn" title="Start Live Voice Session">🎙️</button>
+            <button class="btn-send-chat" id="sendAssistantTextBtn" title="Send Message">→</button>
+        </div>
+    </div>
+
+    <!-- ===================================================================
+         Modals
+         =================================================================== -->
+
+    <!-- Modal 1: Book Appointment Modal -->
+    <div class="modal-overlay" id="bookDoctorModal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>📅 Schedule Doctor Consultation</h3>
+                <button class="btn-icon" id="closeBookDoctorBtn">✕</button>
+            </div>
+            <div class="modal-body">
+                <div id="bookingDoctorInfo" style="padding: 0.85rem; background: var(--bg-muted); border-radius: var(--radius-md); margin-bottom: 1.15rem; font-size: 0.82rem;">
+                    <!-- Injected via JS -->
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="bookPatientName">Patient Full Name <span style="color:#ef4444;">*</span></label>
+                        <input type="text" id="bookPatientName" class="form-input" placeholder="e.g. Ramesh Kumar">
+                    </div>
+                    <div class="form-group">
+                        <label for="bookPatientContact">Contact Phone / Email <span style="color:#ef4444;">*</span></label>
+                        <input type="text" id="bookPatientContact" class="form-input" placeholder="e.g. +91 9876543210">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="bookApptDate">Consultation Date <span style="color:#ef4444;">*</span></label>
+                        <input type="date" id="bookApptDate" class="form-input">
+                    </div>
+                    <div class="form-group">
+                        <label for="bookApptSlot">Available Time Slot <span style="color:#ef4444;">*</span></label>
+                        <select id="bookApptSlot" class="form-select"></select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="bookApptPurpose">Chief Complaint / Consultation Reason</label>
+                    <input type="text" id="bookApptPurpose" class="form-input" placeholder="e.g. Routine cardiology follow-up, chest tightness">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="cancelBookDoctorBtn">Cancel</button>
+                <button class="btn-primary" id="confirmBookDoctorBtn">Confirm Appointment</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 2: Add Doctor Modal (ADMIN-ONLY) -->
+    <div class="modal-overlay" id="addDoctorModal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>
+                    <span>🩺 Register Medical Doctor</span>
+                    <span class="badge-admin-pill">Admin Only</span>
+                </h3>
+                <button class="btn-icon" id="closeAddDoctorBtn">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="newDocName">Doctor Full Name <span style="color:#ef4444;">*</span></label>
+                        <input type="text" id="newDocName" class="form-input" placeholder="e.g. Dr. Sunita Rao">
+                    </div>
+                    <div class="form-group">
+                        <label for="newDocSpec">Specialization <span style="color:#ef4444;">*</span></label>
+                        <input type="text" id="newDocSpec" class="form-input" placeholder="e.g. Senior Cardiologist">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="newDocDept">Department <span style="color:#ef4444;">*</span></label>
+                        <input type="text" id="newDocDept" class="form-input" placeholder="e.g. Cardiology">
+                    </div>
+                    <div class="form-group">
+                        <label for="newDocQual">Medical Qualifications <span style="color:#ef4444;">*</span></label>
+                        <input type="text" id="newDocQual" class="form-input" placeholder="e.g. MBBS, MD, DM (Cardiology)">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="newDocExp">Years of Clinical Experience</label>
+                        <input type="number" id="newDocExp" class="form-input" value="8" min="1" max="50">
+                    </div>
+                    <div class="form-group">
+                        <label for="newDocFee">Consultation Fee</label>
+                        <input type="text" id="newDocFee" class="form-input" value="₹600">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="newDocDays">Available Consultation Days</label>
+                        <input type="text" id="newDocDays" class="form-input" value="Mon, Wed, Fri">
+                    </div>
+                    <div class="form-group">
+                        <label for="newDocSlots">Default Slots</label>
+                        <input type="text" id="newDocSlots" class="form-input" value="09:00 AM, 10:00 AM, 11:30 AM, 02:00 PM, 03:30 PM">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="newDocEmail">Email Address</label>
+                        <input type="email" id="newDocEmail" class="form-input" placeholder="doctor@hrenterprises.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="newDocExt">Phone Extension</label>
+                        <input type="text" id="newDocExt" class="form-input" value="205">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="newDocBio">Doctor Bio & Clinical Focus</label>
+                    <textarea id="newDocBio" class="form-input" rows="2" placeholder="Clinical experience, awards, hospital affiliation..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="cancelAddDoctorBtn">Cancel</button>
+                <button class="btn-primary" id="confirmAddDoctorBtn">💾 Register Doctor</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 3: Appointment Details Modal -->
+    <div class="modal-overlay" id="apptDetailsModal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>📄 Appointment Verification Details</h3>
+                <button class="btn-icon" id="closeApptDetailsBtn">✕</button>
+            </div>
+            <div class="modal-body" id="apptDetailsContent">
+                <!-- Injected via JS -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="dismissApptDetailsBtn">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 4: Authentication (Login / Sign Up / OTP) Modal -->
+    <div class="modal-overlay" id="authModal">
+        <div class="modal-card auth-card">
+            <div class="modal-header">
+                <h3>⚡ Jack AI Authentication</h3>
+                <button class="btn-icon" id="closeAuthModalBtn">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="auth-alert" id="authAlert" style="display: none; padding: 0.75rem 1rem; border-radius: var(--radius-md); font-size: 0.8rem; margin-bottom: 1rem;"></div>
+
+                <!-- STEP 1: Request OTP -->
+                <div class="auth-step-panel active" id="authStepRequest">
+                    <div style="margin-bottom: 1.25rem;">
+                        <h4 style="font-size: 1.15rem; font-weight: 800; color: var(--text-heading); margin-bottom: 0.25rem;">Sign In or Register</h4>
+                        <p style="font-size: 0.82rem; color: var(--text-muted);">Enter your email or phone to receive a secure one-time passcode.</p>
+                    </div>
+
+                    <div class="auth-channel-tabs">
+                        <button class="auth-channel-tab active" id="authTabEmail" type="button">✉️ Email Address</button>
+                        <button class="auth-channel-tab" id="authTabPhone" type="button">📱 Phone Number</button>
+                    </div>
+
+                    <form id="authRequestForm" onsubmit="return false;">
+                        <div class="form-group" id="authNameGroup">
+                            <label for="authNameInput">Full Name <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: normal;">(Optional)</span></label>
+                            <input type="text" id="authNameInput" class="form-input" placeholder="e.g. Ramesh Kumar">
+                        </div>
+
+                        <div class="form-group" id="authEmailGroup">
+                            <label for="authEmailInput">Email Address <span style="color:#ef4444;">*</span></label>
+                            <input type="email" id="authEmailInput" class="form-input" placeholder="user@example.com">
+                        </div>
+
+                        <div class="form-group" id="authPhoneGroup" style="display: none;">
+                            <label for="authPhoneInput">Mobile Phone Number <span style="color:#ef4444;">*</span></label>
+                            <input type="tel" id="authPhoneInput" class="form-input" placeholder="+91 9876543210">
+                        </div>
+
+                        <div style="background: #F0F9FF; border: 1px solid #BAE6FD; border-radius: var(--radius-md); padding: 0.65rem 0.85rem; font-size: 0.76rem; color: #0369A1; margin-bottom: 1.25rem;">
+                            🛡️ 6-digit verification code expires in <strong>30 seconds</strong>.
+                        </div>
+
+                        <button type="button" class="btn-primary" id="sendOtpBtn" style="width: 100%; justify-content: center; padding: 0.75rem;">
+                            Continue & Send OTP →
+                        </button>
+                    </form>
+                </div>
+
+                <!-- STEP 2: Verify OTP -->
+                <div class="auth-step-panel" id="authStepVerify" style="display: none;">
+                    <div style="margin-bottom: 1rem;">
+                        <button class="panel-link" id="authBackToRequestBtn" style="margin-bottom: 0.5rem; display: inline-flex;">← Change email / phone</button>
+                        <h4 style="font-size: 1.15rem; font-weight: 800; color: var(--text-heading); margin-bottom: 0.25rem;">Enter Verification Code</h4>
+                        <p style="font-size: 0.82rem; color: var(--text-muted);">
+                            Code sent to: <strong id="authTargetDisplay" style="color: var(--brand-primary);">user@example.com</strong>
+                        </p>
+                    </div>
+
+                    <div class="otp-inputs-grid" id="otpInputsGrid">
+                        <input type="text" class="otp-digit-box" maxlength="1" inputmode="numeric" pattern="[0-9]*" data-index="0" autofocus>
+                        <input type="text" class="otp-digit-box" maxlength="1" inputmode="numeric" pattern="[0-9]*" data-index="1">
+                        <input type="text" class="otp-digit-box" maxlength="1" inputmode="numeric" pattern="[0-9]*" data-index="2">
+                        <input type="text" class="otp-digit-box" maxlength="1" inputmode="numeric" pattern="[0-9]*" data-index="3">
+                        <input type="text" class="otp-digit-box" maxlength="1" inputmode="numeric" pattern="[0-9]*" data-index="4">
+                        <input type="text" class="otp-digit-box" maxlength="1" inputmode="numeric" pattern="[0-9]*" data-index="5">
+                    </div>
+
+                    <!-- 30s Countdown Timer -->
+                    <div style="background: var(--bg-muted); border-radius: var(--radius-md); padding: 0.75rem 1rem; margin-bottom: 1.25rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem;">
+                            <span>⏱️ Code expires in: <strong id="otpCountdownText" style="color: var(--brand-primary); font-family: var(--font-mono);">30s</strong></span>
+                            <button id="authResendBtn" class="btn-secondary btn-sm" disabled>↻ Resend Code</button>
+                        </div>
+                        <div class="timer-track">
+                            <div class="timer-fill" id="otpTimerBar" style="width: 100%;"></div>
+                        </div>
+                    </div>
+
+                    <button type="button" class="btn-primary" id="verifyOtpBtn" style="width: 100%; justify-content: center; padding: 0.75rem;">
+                        Verify & Sign In ✓
+                    </button>
+                </div>
+
+                <!-- STEP 3: Authenticated Profile -->
+                <div class="auth-step-panel" id="authStepProfile" style="display: none; text-align: center;">
+                    <div style="width: 64px; height: 64px; border-radius: 50%; background: #E0F2FE; color: var(--brand-primary); font-size: 2rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 0.75rem;">👨‍⚕️</div>
+                    <h4 id="profileLargeName" style="font-size: 1.15rem; font-weight: 800; color: var(--text-heading);">Healthcare User</h4>
+                    <p id="profileLargeIdentifier" style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 1.25rem;">user@example.com</p>
+
+                    <div style="background: var(--bg-muted); border-radius: var(--radius-md); padding: 0.85rem 1rem; text-align: left; font-size: 0.8rem; margin-bottom: 1.5rem;">
+                        <div style="display: flex; justify-content: space-between; padding: 0.35rem 0;">
+                            <span style="color: var(--text-muted);">Status:</span>
+                            <strong style="color: #059669;">Verified Active</strong>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; padding: 0.35rem 0;">
+                            <span style="color: var(--text-muted);">Auth Method:</span>
+                            <span id="profileMetaAuthType">OTP Verified</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; padding: 0.35rem 0;">
+                            <span style="color: var(--text-muted);">Member Since:</span>
+                            <span id="profileMetaCreatedAt">Today</span>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                        <button class="btn-secondary" id="authSwitchAccountBtn">Switch Account</button>
+                        <button class="btn-secondary" id="authSignOutBtn" style="color: #dc2626; border-color: #fecaca;">Sign Out</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 5: Quick Settings Modal -->
+    <div class="modal-overlay" id="settingsModal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>⚙️ Voice Assistant & System Settings</h3>
+                <button class="btn-icon" id="closeSettingsBtn">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="apiKeyInput">Google Gemini API Key</label>
+                    <input type="password" id="apiKeyInput" class="form-input" placeholder="AIzaSy...">
+                    <p class="form-help">Enables real-time bidirectional Gemini Live streaming audio.</p>
+                </div>
+                <div class="form-group">
+                    <label for="voiceSelect">Receptionist Voice Persona</label>
+                    <select id="voiceSelect" class="form-select">
+                        <option value="Aoede">Aoede (Warm, Sophisticated - Female)</option>
+                        <option value="Puck">Puck (Energetic, Friendly - Male)</option>
+                        <option value="Charon">Charon (Calm, Professional - Male)</option>
+                        <option value="Fenrir">Fenrir (Authoritative, Crisp - Male)</option>
+                        <option value="Kore">Kore (Gentle, Courteous - Female)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="liveModelDisplay">Live API Model</label>
+                    <input type="text" id="liveModelDisplay" class="form-input" value="{{ live_model | default('gemini-3.1-flash-live-preview') }}" disabled>
+                </div>
+                <div class="form-group">
+                    <label for="customWsUrlInput">External WebSocket Proxy URL (Optional)</label>
+                    <input type="text" id="customWsUrlInput" class="form-input" placeholder="e.g. wss://your-backend.onrender.com/ws/live">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="cancelSettingsBtn">Cancel</button>
+                <button class="btn-primary" id="saveSettingsBtn">Save Configuration</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Compatibility Audio & System Elements -->
+    <div style="display: none;">
+        <span id="receptionistRoleDisplay">Executive AI Healthcare Receptionist</span>
+        <div id="avatarContainer"></div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="/static/js/audio-player.js"></script>
+    <script src="/static/js/audio-processor.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+
+</html>

@@ -1,13 +1,13 @@
 /**
- * HR Enterprises Healthcare SaaS & AI Voice Receptionist
+ * HR Enterprises — JACK AI Receptionist & Enterprise Healthcare SaaS
  * Main Frontend Application Controller
- * Handles View Routing, Real-Time Statistics, Appointment Scheduling,
- * Doctors Directory, Patient Registry, Floating Jack AI Assistant, and Web Audio.
+ * Handles Navigation, Appointments, Doctors, Patients, Call History,
+ * Analytics, Settings, Authentication, and Floating Jack AI Voice Assistant.
  */
 
 document.addEventListener('DOMContentLoaded', () => {
     // =========================================================================
-    // Application State
+    // 1. Application State
     // =========================================================================
     const state = {
         currentView: 'dashboardView',
@@ -25,14 +25,14 @@ document.addEventListener('DOMContentLoaded', () => {
         speechRecognition: null,
         visualizerAnimationId: null,
         currentVolume: 0,
-        companyInfo: null,
         chatHistory: [],
         allAppointments: [],
         allDoctors: [],
         allPatients: [],
+        allCallLogs: [],
         allMessages: [],
         currentApptFilter: 'all',
-        currentMsgFilter: 'all',
+        currentCallFilter: 'all',
         selectedBookingDoctor: null,
         authToken: localStorage.getItem('jack_auth_token') || '',
         currentUser: null,
@@ -43,12 +43,13 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // =========================================================================
-    // DOM Elements Cache
+    // 2. DOM Elements Cache
     // =========================================================================
-    // Topbar & Clock
+    // Topbar & Navigation
     const systemClock = document.getElementById('systemClock');
     const currentDateDisplay = document.getElementById('currentDateDisplay');
     const currentPageTitle = document.getElementById('currentPageTitle');
+    const currentPageSubtitle = document.getElementById('currentPageSubtitle');
     const connectionPill = document.getElementById('connectionPill');
     const connectionText = document.getElementById('connectionText');
     const mobileMenuToggle = document.getElementById('mobileMenuToggle');
@@ -62,8 +63,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const notifDropdownList = document.getElementById('notifDropdownList');
     const headerSettingsBtn = document.getElementById('headerSettingsBtn');
     const openSettingsBtn = document.getElementById('openSettingsBtn');
+    const sidebarLogoutNavBtn = document.getElementById('sidebarLogoutNavBtn');
 
-    // Auth & User Elements
+    // User Profile Bar
     const topbarUserPill = document.getElementById('topbarUserPill');
     const topbarUserAvatar = document.getElementById('topbarUserAvatar');
     const topbarUserName = document.getElementById('topbarUserName');
@@ -73,64 +75,32 @@ document.addEventListener('DOMContentLoaded', () => {
     const sidebarUserAvatar = document.getElementById('sidebarUserAvatar');
     const sidebarAuthActionBtn = document.getElementById('sidebarAuthActionBtn');
 
-    // Auth Modal Elements
-    const authModal = document.getElementById('authModal');
-    const closeAuthModalBtn = document.getElementById('closeAuthModalBtn');
-    const authAlert = document.getElementById('authAlert');
-    const authStepRequest = document.getElementById('authStepRequest');
-    const authStepVerify = document.getElementById('authStepVerify');
-    const authStepProfile = document.getElementById('authStepProfile');
-    const authTabEmail = document.getElementById('authTabEmail');
-    const authTabPhone = document.getElementById('authTabPhone');
-    const authNameGroup = document.getElementById('authNameGroup');
-    const authNameInput = document.getElementById('authNameInput');
-    const authEmailGroup = document.getElementById('authEmailGroup');
-    const authEmailInput = document.getElementById('authEmailInput');
-    const authPhoneGroup = document.getElementById('authPhoneGroup');
-    const authPhoneInput = document.getElementById('authPhoneInput');
-    const sendOtpBtn = document.getElementById('sendOtpBtn');
-    const authBackToRequestBtn = document.getElementById('authBackToRequestBtn');
-    const authTargetDisplay = document.getElementById('authTargetDisplay');
-    const otpInputsGrid = document.getElementById('otpInputsGrid');
-    const otpDigitBoxes = document.querySelectorAll('.otp-digit-box');
-    const otpCountdownText = document.getElementById('otpCountdownText');
-    const otpTimerBar = document.getElementById('otpTimerBar');
-    const authResendBtn = document.getElementById('authResendBtn');
-    const verifyOtpBtn = document.getElementById('verifyOtpBtn');
-    const profileLargeAvatar = document.getElementById('profileLargeAvatar');
-    const profileLargeName = document.getElementById('profileLargeName');
-    const profileLargeIdentifier = document.getElementById('profileLargeIdentifier');
-    const profileMetaAuthType = document.getElementById('profileMetaAuthType');
-    const profileMetaCreatedAt = document.getElementById('profileMetaCreatedAt');
-    const profileMetaLastLogin = document.getElementById('profileMetaLastLogin');
-    const authSwitchAccountBtn = document.getElementById('authSwitchAccountBtn');
-    const authSignOutBtn = document.getElementById('authSignOutBtn');
-
     // Sidebar Nav & Badges
     const navItems = document.querySelectorAll('.nav-item[data-view]');
     const viewPanels = document.querySelectorAll('.view-panel');
     const sidebarApptBadge = document.getElementById('sidebarApptBadge');
     const sidebarDoctorBadge = document.getElementById('sidebarDoctorBadge');
     const sidebarPatientBadge = document.getElementById('sidebarPatientBadge');
-    const sidebarMsgBadge = document.getElementById('sidebarMsgBadge');
+    const sidebarCallBadge = document.getElementById('sidebarCallBadge');
     const quickTalkBtn = document.getElementById('quickTalkBtn');
-    const quickTriggerJackBtn = document.getElementById('quickTriggerJackBtn');
 
-    // Dashboard Stat Cards & Mini Previews
+    // Dashboard Elements
     const statTotalAppts = document.getElementById('statTotalAppts');
-    const statAvailableDocs = document.getElementById('statAvailableDocs');
+    const statTodayAppts = document.getElementById('statTodayAppts');
     const statTotalPatients = document.getElementById('statTotalPatients');
-    const statPendingAppts = document.getElementById('statPendingAppts');
+    const statAvailableDocs = document.getElementById('statAvailableDocs');
     const statTotalDocsSub = document.getElementById('statTotalDocsSub');
     const dashboardApptsTbody = document.getElementById('dashboardApptsTbody');
-    const dashboardDoctorsMini = document.getElementById('dashboardDoctorsMini');
-    const dashboardMessagesMini = document.getElementById('dashboardMessagesMini');
+    const dashboardCallsMini = document.getElementById('dashboardCallsMini');
     const refreshDashboardBtn = document.getElementById('refreshDashboardBtn');
     const quickNewApptBtn = document.getElementById('quickNewApptBtn');
-    const quickNewDocBtn = document.getElementById('quickNewDocBtn');
+    const heroTalkJackBtn = document.getElementById('heroTalkJackBtn');
+    const stripNewApptBtn = document.getElementById('stripNewApptBtn');
+    const stripNewDocBtn = document.getElementById('stripNewDocBtn');
+    const stripTalkJackBtn = document.getElementById('stripTalkJackBtn');
+    const stripViewAnalyticsBtn = document.getElementById('stripViewAnalyticsBtn');
     const viewAllApptsLink = document.getElementById('viewAllApptsLink');
-    const viewAllDoctorsLink = document.getElementById('viewAllDoctorsLink');
-    const viewAllMessagesLink = document.getElementById('viewAllMessagesLink');
+    const viewAllCallsLink = document.getElementById('viewAllCallsLink');
 
     // Appointments Elements
     const apptFilterGroup = document.getElementById('apptFilterGroup');
@@ -157,43 +127,45 @@ document.addEventListener('DOMContentLoaded', () => {
     const patientNewApptBtn = document.getElementById('patientNewApptBtn');
     const refreshPatientsBtn = document.getElementById('refreshPatientsBtn');
 
-    // Messages Elements
-    const messagesList = document.getElementById('messagesList');
-    const msgFilterGroup = document.getElementById('msgFilterGroup');
-    const refreshMsgsBtn = document.getElementById('refreshMsgsBtn');
-    const msgFilterAllCount = document.getElementById('msgFilterAllCount');
-    const msgFilterUnreadCount = document.getElementById('msgFilterUnreadCount');
-    const msgFilterUrgentCount = document.getElementById('msgFilterUrgentCount');
+    // Call History Elements
+    const callHistoryList = document.getElementById('callHistoryList');
+    const callHistoryFilterGroup = document.getElementById('callHistoryFilterGroup');
+    const callSearchInput = document.getElementById('callSearchInput');
+    const refreshCallsBtn = document.getElementById('refreshCallsBtn');
+    const countCallsAll = document.getElementById('countCallsAll');
+    const countCallsVoice = document.getElementById('countCallsVoice');
+    const countCallsMsg = document.getElementById('countCallsMsg');
+    const countCallsUrgent = document.getElementById('countCallsUrgent');
 
-    // Directory, FAQ, Logs
-    const directoryList = document.getElementById('directoryList');
-    const directorySearchInput = document.getElementById('directorySearchInput');
-    const refreshDirectoryBtn = document.getElementById('refreshDirectoryBtn');
-    const faqList = document.getElementById('faqList');
-    const logsList = document.getElementById('logsList');
-    const refreshLogsBtn = document.getElementById('refreshLogsBtn');
+    // Analytics Elements
+    const refreshAnalyticsBtn = document.getElementById('refreshAnalyticsBtn');
+    const kpiResolutionRate = document.getElementById('kpiResolutionRate');
+    const kpiAvgDuration = document.getElementById('kpiAvgDuration');
+    const kpiDocUtilization = document.getElementById('kpiDocUtilization');
+    const kpiAiHandled = document.getElementById('kpiAiHandled');
+    const analyticsDeptBars = document.getElementById('analyticsDeptBars');
+    const analyticsStatusBars = document.getElementById('analyticsStatusBars');
+    const analyticsDailyTrend = document.getElementById('analyticsDailyTrend');
+    const analyticsDocLoad = document.getElementById('analyticsDocLoad');
+
+    // Settings View Elements
+    const settingsApiKeyInput = document.getElementById('settingsApiKeyInput');
+    const settingsVoiceSelect = document.getElementById('settingsVoiceSelect');
+    const settingsCustomWs = document.getElementById('settingsCustomWs');
+    const saveMainSettingsBtn = document.getElementById('saveMainSettingsBtn');
 
     // Floating Jack AI Assistant
-    const jackFloatingContainer = document.getElementById('jackFloatingContainer');
-    const jackFloatingBtn = document.getElementById('jackFloatingBtn');
-    const jackAssistantPopup = document.getElementById('jackAssistantPopup');
-    const closeAssistantBtn = document.getElementById('closeAssistantBtn');
-    const minimizeAssistantBtn = document.getElementById('minimizeAssistantBtn');
-    const liveBadge = document.getElementById('liveBadge');
-    const badgeText = document.getElementById('badgeText');
-    const startCallBtn = document.getElementById('startCallBtn');
-    const endCallBtn = document.getElementById('endCallBtn');
-    const muteBtn = document.getElementById('muteBtn');
-    const muteIcon = document.getElementById('muteIcon');
-    const muteLabel = document.getElementById('muteLabel');
-    const activeToolBanner = document.getElementById('activeToolBanner');
-    const toolBannerText = document.getElementById('toolBannerText');
-    const transcriptFeed = document.getElementById('transcriptFeed');
-    const chatInput = document.getElementById('chatInput');
-    const sendChatBtn = document.getElementById('sendChatBtn');
-    const micVoiceBtn = document.getElementById('micVoiceBtn');
-    const waveformCanvas = document.getElementById('waveformCanvas');
-    const promptPills = document.querySelectorAll('.prompt-pill');
+    const quickTriggerJackBtn = document.getElementById('quickTriggerJackBtn');
+    const floatingAssistantWindow = document.getElementById('floatingAssistantWindow');
+    const closeFloatingAssistantBtn = document.getElementById('closeFloatingAssistantBtn');
+    const floatingAiStatusText = document.getElementById('floatingAiStatusText');
+    const visualizerWaves = document.getElementById('visualizerWaves');
+    const assistantVoiceState = document.getElementById('assistantVoiceState');
+    const assistantChatStream = document.getElementById('assistantChatStream');
+    const assistantTextInput = document.getElementById('assistantTextInput');
+    const startVoiceCallBtn = document.getElementById('startVoiceCallBtn');
+    const sendAssistantTextBtn = document.getElementById('sendAssistantTextBtn');
+    const promptChips = document.querySelectorAll('.prompt-chip');
 
     // Modals
     const bookDoctorModal = document.getElementById('bookDoctorModal');
@@ -236,18 +208,47 @@ document.addEventListener('DOMContentLoaded', () => {
     const voiceSelect = document.getElementById('voiceSelect');
     const customWsUrlInput = document.getElementById('customWsUrlInput');
 
+    // Auth Modal
+    const authModal = document.getElementById('authModal');
+    const closeAuthModalBtn = document.getElementById('closeAuthModalBtn');
+    const authAlert = document.getElementById('authAlert');
+    const authStepRequest = document.getElementById('authStepRequest');
+    const authStepVerify = document.getElementById('authStepVerify');
+    const authStepProfile = document.getElementById('authStepProfile');
+    const authTabEmail = document.getElementById('authTabEmail');
+    const authTabPhone = document.getElementById('authTabPhone');
+    const authNameInput = document.getElementById('authNameInput');
+    const authEmailGroup = document.getElementById('authEmailGroup');
+    const authEmailInput = document.getElementById('authEmailInput');
+    const authPhoneGroup = document.getElementById('authPhoneGroup');
+    const authPhoneInput = document.getElementById('authPhoneInput');
+    const sendOtpBtn = document.getElementById('sendOtpBtn');
+    const authBackToRequestBtn = document.getElementById('authBackToRequestBtn');
+    const authTargetDisplay = document.getElementById('authTargetDisplay');
+    const otpDigitBoxes = document.querySelectorAll('.otp-digit-box');
+    const otpCountdownText = document.getElementById('otpCountdownText');
+    const otpTimerBar = document.getElementById('otpTimerBar');
+    const authResendBtn = document.getElementById('authResendBtn');
+    const verifyOtpBtn = document.getElementById('verifyOtpBtn');
+    const profileLargeName = document.getElementById('profileLargeName');
+    const profileLargeIdentifier = document.getElementById('profileLargeIdentifier');
+    const profileMetaAuthType = document.getElementById('profileMetaAuthType');
+    const profileMetaCreatedAt = document.getElementById('profileMetaCreatedAt');
+    const authSwitchAccountBtn = document.getElementById('authSwitchAccountBtn');
+    const authSignOutBtn = document.getElementById('authSignOutBtn');
+
     const toastContainer = document.getElementById('toastContainer');
 
     // =========================================================================
-    // System Clock & Live Date
+    // 3. System Clock & Date
     // =========================================================================
     function updateClock() {
         const now = new Date();
         if (systemClock) {
-            systemClock.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' EST';
+            systemClock.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         }
         if (currentDateDisplay) {
-            currentDateDisplay.textContent = now.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+            currentDateDisplay.textContent = now.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
         }
     }
     setInterval(updateClock, 1000);
@@ -261,23 +262,44 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // =========================================================================
-    // View Switching & Sidebar Navigation
+    // 4. View Switching & Navigation
     // =========================================================================
-    const viewTitles = {
-        dashboardView: 'Dashboard Overview',
-        appointmentsView: 'Appointment Management',
-        doctorsView: 'Doctors & Specialists Directory',
-        patientsView: 'Registered Patient Records',
-        messagesView: 'Caller Inquiries & Voicemails',
-        directoryView: 'Corporate Staff Directory',
-        faqView: 'Office Policy & Facility Info',
-        logsView: 'Reception Call History & Logs'
+    const viewMetadata = {
+        dashboardView: {
+            title: 'Dashboard Overview',
+            subtitle: 'Real-time healthcare operations, clinical appointments & intelligent AI concierge'
+        },
+        appointmentsView: {
+            title: 'Clinical Appointment Management',
+            subtitle: 'Track, verify, schedule and manage patient bookings across all departments'
+        },
+        doctorsView: {
+            title: 'Doctors & Specialists Directory',
+            subtitle: 'Consulting medical faculty, clinical schedules, consultation fees and real-time availability'
+        },
+        patientsView: {
+            title: 'Registered Patients Registry',
+            subtitle: 'Patient contact details, historical consultations, and rapid appointment scheduling'
+        },
+        callHistoryView: {
+            title: 'Receptionist Call History & Messages',
+            subtitle: 'Comprehensive record of live AI voice interactions, telephone caller notes, and voicemails'
+        },
+        analyticsView: {
+            title: 'Clinical Operations & AI Analytics',
+            subtitle: 'Performance metrics, department distributions, doctor utilization, and AI receptionist efficiency'
+        },
+        settingsView: {
+            title: 'System & Voice Assistant Configuration',
+            subtitle: 'Configure Gemini Live AI parameters, voice personas, operating hours, and security settings'
+        }
     };
 
     function switchView(targetViewId) {
+        if (!targetViewId) return;
         state.currentView = targetViewId;
 
-        // Update nav items active state
+        // Update nav items
         navItems.forEach(item => {
             if (item.getAttribute('data-view') === targetViewId) {
                 item.classList.add('active');
@@ -286,7 +308,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // Show target view panel
+        // Show panel
         viewPanels.forEach(panel => {
             if (panel.id === targetViewId) {
                 panel.classList.add('active');
@@ -295,27 +317,26 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // Update Page Title
-        if (currentPageTitle && viewTitles[targetViewId]) {
-            currentPageTitle.textContent = viewTitles[targetViewId];
+        // Update headings
+        if (viewMetadata[targetViewId]) {
+            if (currentPageTitle) currentPageTitle.textContent = viewMetadata[targetViewId].title;
+            if (currentPageSubtitle) currentPageSubtitle.textContent = viewMetadata[targetViewId].subtitle;
         }
 
-        // Close mobile sidebar if open
+        // Close mobile drawer
         if (appSidebar) appSidebar.classList.remove('open');
         if (sidebarBackdrop) sidebarBackdrop.classList.remove('show');
 
-        // Trigger view-specific loads
+        // Trigger view loads
         if (targetViewId === 'dashboardView') loadDashboardStats();
         else if (targetViewId === 'appointmentsView') loadAppointments();
         else if (targetViewId === 'doctorsView') loadDoctors();
         else if (targetViewId === 'patientsView') loadPatients();
-        else if (targetViewId === 'messagesView') loadMessages();
-        else if (targetViewId === 'directoryView') loadDirectory();
-        else if (targetViewId === 'faqView') loadCompanyDetails();
-        else if (targetViewId === 'logsView') loadCallLogs();
+        else if (targetViewId === 'callHistoryView') loadCallHistory();
+        else if (targetViewId === 'analyticsView') loadAnalytics();
+        else if (targetViewId === 'settingsView') syncSettingsInputs();
     }
 
-    // Attach click handlers to sidebar nav items
     navItems.forEach(item => {
         item.addEventListener('click', () => {
             const viewId = item.getAttribute('data-view');
@@ -323,12 +344,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Quick links from Dashboard
-    if (viewAllApptsLink) viewAllApptsLink.addEventListener('click', () => switchView('appointmentsView'));
-    if (viewAllDoctorsLink) viewAllDoctorsLink.addEventListener('click', () => switchView('doctorsView'));
-    if (viewAllMessagesLink) viewAllMessagesLink.addEventListener('click', () => switchView('messagesView'));
-
-    // Mobile Menu Toggle
+    // Mobile Drawer
     if (mobileMenuToggle) {
         mobileMenuToggle.addEventListener('click', () => {
             appSidebar.classList.toggle('open');
@@ -342,597 +358,28 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // =========================================================================
-    // Waveform Visualizer Canvas
-    // =========================================================================
-    const canvasCtx = waveformCanvas ? waveformCanvas.getContext('2d') : null;
-
-    function drawWaveform() {
-        if (!waveformCanvas || !canvasCtx) return;
-        state.visualizerAnimationId = requestAnimationFrame(drawWaveform);
-
-        const width = waveformCanvas.width;
-        const height = waveformCanvas.height;
-        canvasCtx.clearRect(0, 0, width, height);
-
-        let freqData = new Uint8Array(0);
-        if (state.audioPlayer && state.audioPlayer.isPlaying) {
-            freqData = state.audioPlayer.getFrequencyData();
-        }
-
-        const barCount = 34;
-        const barWidth = 4;
-        const gap = (width - (barCount * barWidth)) / (barCount - 1);
-
-        for (let i = 0; i < barCount; i++) {
-            let barHeight = 3;
-
-            if (state.isCallActive) {
-                if (state.audioPlayer && state.audioPlayer.isPlaying && freqData.length > 0) {
-                    const freqIdx = Math.floor((i / barCount) * freqData.length);
-                    const val = freqData[freqIdx] / 255.0;
-                    barHeight = Math.max(3, val * (height * 0.9));
-                } else if (state.isJackSpeaking) {
-                    const time = Date.now() * 0.008;
-                    const wave = Math.sin(time + i * 0.4) * (height * 0.45) + Math.cos(time * 0.3 + i * 0.2) * (height * 0.25);
-                    barHeight = Math.max(4, Math.abs(wave));
-                } else if (state.currentVolume > 0.01) {
-                    const wave = Math.sin((i / barCount) * Math.PI) * state.currentVolume * (height * 0.85);
-                    barHeight = Math.max(3, wave);
-                } else {
-                    const time = Date.now() * 0.004;
-                    barHeight = 3 + Math.sin(time + i * 0.35) * 2.5;
-                }
-            }
-
-            const x = i * (barWidth + gap);
-            const y = (height - barHeight) / 2;
-
-            const grad = canvasCtx.createLinearGradient(x, y, x, y + barHeight);
-            if ((state.audioPlayer && state.audioPlayer.isPlaying) || state.isJackSpeaking) {
-                grad.addColorStop(0, '#00f0ff');
-                grad.addColorStop(1, '#3b82f6');
-            } else if (state.currentVolume > 0.05) {
-                grad.addColorStop(0, '#38bdf8');
-                grad.addColorStop(1, '#0284c7');
-            } else {
-                grad.addColorStop(0, 'rgba(0, 240, 255, 0.4)');
-                grad.addColorStop(1, 'rgba(255, 255, 255, 0.1)');
-            }
-
-            canvasCtx.fillStyle = grad;
-            canvasCtx.beginPath();
-            if (canvasCtx.roundRect) {
-                canvasCtx.roundRect(x, y, barWidth, barHeight, 2);
-            } else {
-                canvasCtx.rect(x, y, barWidth, barHeight);
-            }
-            canvasCtx.fill();
-        }
-    }
-    drawWaveform();
-
-    // =========================================================================
-    // Floating Jack AI Assistant Window Management
-    // =========================================================================
-    function toggleAssistantWindow(open) {
-        state.isAssistantOpen = typeof open === 'boolean' ? open : !state.isAssistantOpen;
-        if (state.isAssistantOpen) {
-            jackAssistantPopup.classList.add('show');
-            if (chatInput) chatInput.focus();
-        } else {
-            jackAssistantPopup.classList.remove('show');
-        }
-    }
-
-    if (jackFloatingBtn) {
-        jackFloatingBtn.addEventListener('click', () => toggleAssistantWindow());
-    }
-    if (closeAssistantBtn) {
-        closeAssistantBtn.addEventListener('click', () => toggleAssistantWindow(false));
-    }
-    if (minimizeAssistantBtn) {
-        minimizeAssistantBtn.addEventListener('click', () => toggleAssistantWindow(false));
-    }
-    if (quickTalkBtn) {
-        quickTalkBtn.addEventListener('click', () => toggleAssistantWindow(true));
-    }
-    if (quickTriggerJackBtn) {
-        quickTriggerJackBtn.addEventListener('click', () => toggleAssistantWindow(true));
-    }
-
-    function updateLiveBadge(type, text) {
-        if (liveBadge) {
-            liveBadge.className = `live-badge ${type}`;
-        }
-        if (badgeText) {
-            badgeText.textContent = text;
-        }
-        const sidebarAiState = document.getElementById('sidebarAiState');
-        if (sidebarAiState) {
-            if (type === 'speaking') sidebarAiState.textContent = 'Speaking...';
-            else if (type === 'listening') sidebarAiState.textContent = 'Listening...';
-            else if (type === 'processing') sidebarAiState.textContent = 'Thinking...';
-            else sidebarAiState.textContent = 'Online & Ready';
-        }
-    }
-
-    function showToolExecution(toolName, args) {
-        if (!activeToolBanner || !toolBannerText) return;
-        activeToolBanner.style.display = 'flex';
-        let label = 'Processing front-desk clinical request...';
-        if (toolName === 'search_doctors') label = 'Searching medical specialists in directory...';
-        else if (toolName === 'check_availability') label = 'Checking live doctor calendar availability...';
-        else if (toolName === 'book_appointment') label = `Confirming verified booking with ${args.staff_or_department || 'doctor'}...`;
-        else if (toolName === 'cancel_appointment') label = 'Cancelling requested appointment...';
-        else if (toolName === 'leave_message') label = `Logging caller message for ${args.recipient_name || 'clinic'}...`;
-        else if (toolName === 'lookup_directory') label = `Searching directory for '${args.query || ''}'...`;
-        else if (toolName === 'get_company_info') label = 'Retrieving hospital hours & parking directions...';
-        else if (toolName === 'transfer_call') label = `Routing call to ${args.recipient_or_department || 'department'}...`;
-
-        toolBannerText.textContent = label;
-    }
-
-    function hideToolExecution() {
-        if (!activeToolBanner) return;
-        setTimeout(() => {
-            activeToolBanner.style.display = 'none';
-        }, 800);
-    }
-
-    function appendTranscriptMessage(role, text) {
-        if (!transcriptFeed || !text) return;
-
-        if (role === 'system') {
-            const notice = document.createElement('div');
-            notice.className = 'system-notice';
-            notice.textContent = text;
-            transcriptFeed.appendChild(notice);
-            transcriptFeed.scrollTop = transcriptFeed.scrollHeight;
-            return;
-        }
-
-        const msgDiv = document.createElement('div');
-        msgDiv.className = `transcript-message ${role}`;
-
-        const avatar = document.createElement('div');
-        avatar.className = 'message-avatar';
-        avatar.textContent = role === 'model' ? '🎙️' : '👤';
-
-        const bubble = document.createElement('div');
-        bubble.className = 'message-bubble';
-        bubble.textContent = text;
-
-        msgDiv.appendChild(avatar);
-        msgDiv.appendChild(bubble);
-        transcriptFeed.appendChild(msgDiv);
-        transcriptFeed.scrollTop = transcriptFeed.scrollHeight;
-    }
-
-    // Prompt Suggestions in Assistant
-    promptPills.forEach(pill => {
-        pill.addEventListener('click', () => {
-            const promptText = pill.getAttribute('data-prompt');
-            if (promptText) {
-                sendTextMessage(promptText);
-            }
-        });
-    });
-
-    // =========================================================================
-    // Speech Synthesis & Voice Processing
-    // =========================================================================
-    function speakJack(text, onComplete) {
-        if (!('speechSynthesis' in window)) {
-            if (onComplete) onComplete();
-            return;
-        }
-        try {
-            window.speechSynthesis.cancel();
-            window.speechSynthesis.resume();
-        } catch (e) { }
-
-        // Clean markdown symbols for smooth, natural voice speech
-        const spokenText = (text || '')
-            .replace(/[*_#`~\[\]\(\)]/g, '')
-            .replace(/•/g, '')
-            .replace(/\s+/g, ' ')
-            .trim();
-
-        if (!spokenText) {
-            if (onComplete) onComplete();
-            return;
-        }
-
-        const utterance = new SpeechSynthesisUtterance(spokenText);
-        utterance.rate = 1.05;
-        utterance.pitch = 1.0;
-        utterance.lang = 'en-US';
-
-        const voices = window.speechSynthesis.getVoices();
-        const preferred = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Samantha') || v.name.includes('Alex')));
-        if (preferred) utterance.voice = preferred;
-
-        utterance.onstart = () => {
-            state.isJackSpeaking = true;
-            updateLiveBadge('speaking', 'Jack Speaking');
-        };
-
-        utterance.onend = () => {
-            state.isJackSpeaking = false;
-            if (state.isCallActive) {
-                updateLiveBadge('listening', 'Listening...');
-            } else {
-                updateLiveBadge('idle', 'Standby');
-            }
-            if (onComplete) onComplete();
-        };
-
-        utterance.onerror = () => {
-            state.isJackSpeaking = false;
-            updateLiveBadge('idle', 'Standby');
-            if (onComplete) onComplete();
-        };
-
-        window.speechSynthesis.speak(utterance);
-    }
-
-    // =========================================================================
-    // Browser Voice Session (Speech Recognition Fallback Mode)
-    // =========================================================================
-    function startBrowserVoiceSession() {
-        const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRec) {
-            showToast('Voice speech recognition not supported in this browser. Please use text chat.', 'error');
-            return;
-        }
-
-        state.isSpeechRecognitionMode = true;
-        state.isCallActive = true;
-        updateCallUiState(true);
-        updateLiveBadge('listening', 'Listening...');
-        appendTranscriptMessage('system', 'Connected to Jack via Voice Assistant mode. Speak into your microphone!');
-
-        if (state.chatHistory.length === 0) {
-            const greetingText = "Good day! Welcome to HR Enterprises. My name is Jack, your AI Voice Receptionist. How may I assist you with your appointment or inquiry today?";
-            state.chatHistory.push({ role: 'model', text: greetingText });
-            appendTranscriptMessage('model', greetingText);
-            speakJack(greetingText);
-        }
-
-        const recognition = new SpeechRec();
-        recognition.continuous = true;
-        recognition.interimResults = false;
-        recognition.lang = 'en-US';
-
-        recognition.onspeechstart = () => {
-            if (state.isJackSpeaking) {
-                try { window.speechSynthesis.cancel(); } catch (e) { }
-                state.isJackSpeaking = false;
-                updateLiveBadge('listening', 'Listening...');
-            }
-        };
-
-        recognition.onresult = async (event) => {
-            const last = event.results.length - 1;
-            const transcript = event.results[last][0].transcript.trim();
-            if (!transcript || state.isMuted) return;
-
-            if (state.isJackSpeaking) {
-                try { window.speechSynthesis.cancel(); } catch (e) { }
-                state.isJackSpeaking = false;
-            }
-
-            appendTranscriptMessage('user', transcript);
-            updateLiveBadge('processing', 'Jack Thinking...');
-            state.chatHistory.push({ role: 'user', text: transcript });
-
-            try {
-                const res = await fetch('/api/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        message: transcript,
-                        history: state.chatHistory,
-                        api_key: state.apiKey
-                    })
-                });
-
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.detail || 'Chat request failed');
-
-                state.chatHistory.push({ role: 'model', text: data.reply });
-                appendTranscriptMessage('model', data.reply);
-                speakJack(data.reply);
-
-                if (data.actions && data.actions.length > 0) {
-                    loadDashboardStats();
-                    loadAppointments();
-                    loadMessages();
-                    loadDoctors();
-                    loadPatients();
-                }
-            } catch (err) {
-                console.error('Speech interaction error:', err);
-                showToast(err.message, 'error');
-                updateLiveBadge('listening', 'Listening...');
-            }
-        };
-
-        recognition.onerror = (e) => {
-            if (e.error !== 'no-speech') {
-                console.warn('Speech recognition warning:', e.error);
-            }
-        };
-
-        recognition.onend = () => {
-            if (state.isCallActive && state.isSpeechRecognitionMode) {
-                try { recognition.start(); } catch (e) { }
-            }
-        };
-
-        try {
-            recognition.start();
-            state.speechRecognition = recognition;
-        } catch (e) {
-            console.error('Could not start SpeechRecognition:', e);
-            showToast('Microphone access denied', 'error');
-            endVoiceCall();
-        }
-    }
-
-    // =========================================================================
-    // Live Voice Call Management (WebSocket Mode)
-    // =========================================================================
-    async function startVoiceCall() {
-        if (state.isCallActive) return;
-
-        updateLiveBadge('processing', 'Connecting...');
-        if (connectionText) connectionText.textContent = 'Connecting...';
-
-        const isVercelHost = window.location.hostname.endsWith('vercel.app') || window.location.hostname.includes('vercel');
-        if ((isVercelHost && !state.customWsUrl) || (!state.apiKey && !state.customWsUrl)) {
-            startBrowserVoiceSession();
-            return;
-        }
-
-        try {
-            state.audioPlayer = new window.PcmAudioPlayer(24000);
-            state.audioPlayer.init();
-            state.audioPlayer.onPlaybackStateChange = (isPlaying) => {
-                if (isPlaying) updateLiveBadge('speaking', 'Jack Speaking');
-                else if (state.isCallActive) updateLiveBadge('listening', 'Listening...');
-            };
-
-            state.audioRecorder = new window.PcmAudioRecorder({
-                targetSampleRate: 16000,
-                onAudioChunk: (base64Pcm) => {
-                    if (state.ws && state.ws.readyState === WebSocket.OPEN) {
-                        state.ws.send(JSON.stringify({ type: 'audio', data: base64Pcm }));
-                    }
-                },
-                onVolumeChange: (vol) => {
-                    state.currentVolume = vol;
-                }
-            });
-            await state.audioRecorder.start();
-
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const queryParams = new URLSearchParams();
-            if (state.apiKey) queryParams.set('api_key', state.apiKey);
-            if (state.voice) queryParams.set('voice', state.voice);
-
-            let wsUrl = state.customWsUrl || `${protocol}//${window.location.host}/ws/live?${queryParams.toString()}`;
-            let connectionOpened = false;
-            state.ws = new WebSocket(wsUrl);
-
-            state.ws.onopen = () => {
-                connectionOpened = true;
-                state.isCallActive = true;
-                updateCallUiState(true);
-                if (connectionPill) connectionPill.classList.add('live-active');
-                if (connectionText) connectionText.textContent = 'Live Audio Call';
-                appendTranscriptMessage('system', 'Connected to front desk. Jack is listening...');
-            };
-
-            state.ws.onmessage = (event) => {
-                handleWebSocketMessage(event.data);
-            };
-
-            state.ws.onerror = (err) => {
-                console.warn('WebSocket connection error:', err);
-                if (!connectionOpened) {
-                    showToast('Switching to Voice Assistant mode...', 'info');
-                    if (state.audioRecorder) { state.audioRecorder.stop(); state.audioRecorder = null; }
-                    if (state.audioPlayer) { state.audioPlayer.close(); state.audioPlayer = null; }
-                    startBrowserVoiceSession();
-                } else {
-                    showToast('WebSocket connection error', 'error');
-                }
-            };
-
-            state.ws.onclose = () => {
-                if (connectionOpened) endVoiceCall();
-            };
-
-        } catch (err) {
-            console.error('Failed to start call:', err);
-            startBrowserVoiceSession();
-        }
-    }
-
-    function endVoiceCall() {
-        state.isCallActive = false;
-        state.isSpeechRecognitionMode = false;
-        state.isMuted = false;
-        state.currentVolume = 0;
-
-        try { window.speechSynthesis.cancel(); } catch (e) { }
-
-        if (state.speechRecognition) {
-            try { state.speechRecognition.stop(); } catch (e) { }
-            state.speechRecognition = null;
-        }
-
-        if (state.audioRecorder) {
-            state.audioRecorder.stop();
-            state.audioRecorder = null;
-        }
-
-        if (state.audioPlayer) {
-            state.audioPlayer.close();
-            state.audioPlayer = null;
-        }
-
-        if (state.ws) {
-            try { state.ws.close(); } catch (e) { }
-            state.ws = null;
-        }
-
-        updateCallUiState(false);
-        updateLiveBadge('idle', 'Standby');
-        if (connectionPill) connectionPill.classList.remove('live-active');
-        if (connectionText) connectionText.textContent = 'Ready';
-        appendTranscriptMessage('system', 'Voice call ended.');
-    }
-
-    function updateCallUiState(isActive) {
-        if (startCallBtn) startCallBtn.style.display = isActive ? 'none' : 'flex';
-        if (endCallBtn) endCallBtn.style.display = isActive ? 'flex' : 'none';
-        if (muteBtn) muteBtn.style.display = isActive ? 'flex' : 'none';
-        hideToolExecution();
-    }
-
-    function handleWebSocketMessage(rawMsg) {
-        try {
-            const msg = JSON.parse(rawMsg);
-            switch (msg.type) {
-                case 'status':
-                    if (msg.status === 'connected') updateLiveBadge('listening', 'Listening...');
-                    break;
-                case 'audio':
-                    if (state.audioPlayer && msg.data) state.audioPlayer.playChunk(msg.data);
-                    break;
-                case 'transcript':
-                    appendTranscriptMessage(msg.role === 'model' ? 'model' : 'user', msg.text);
-                    break;
-                case 'tool_executing':
-                    showToolExecution(msg.name, msg.args);
-                    break;
-                case 'tool_result':
-                    hideToolExecution();
-                    if (['book_appointment', 'cancel_appointment'].includes(msg.name)) {
-                        loadDashboardStats();
-                        loadAppointments();
-                        loadPatients();
-                    } else if (msg.name === 'leave_message') {
-                        loadDashboardStats();
-                        loadMessages();
-                    }
-                    break;
-                case 'interrupted':
-                    if (state.audioPlayer) state.audioPlayer.interrupt();
-                    updateLiveBadge('listening', 'Listening...');
-                    break;
-                case 'error':
-                    showToast(msg.message, 'error');
-                    appendTranscriptMessage('system', `Notice: ${msg.message}`);
-                    break;
-            }
-        } catch (e) {
-            console.error('Error parsing WebSocket message:', e);
-        }
-    }
-
-    // Call Buttons Listeners
-    if (startCallBtn) startCallBtn.addEventListener('click', () => startVoiceCall());
-    if (endCallBtn) endCallBtn.addEventListener('click', () => endVoiceCall());
-    if (muteBtn) {
-        muteBtn.addEventListener('click', () => {
-            state.isMuted = !state.isMuted;
-            if (muteIcon) muteIcon.textContent = state.isMuted ? '🔇' : '🎤';
-            if (muteLabel) muteLabel.textContent = state.isMuted ? 'Unmute' : 'Mute';
-            showToast(state.isMuted ? 'Microphone muted' : 'Microphone unmuted', 'info');
-        });
-    }
-
-    // =========================================================================
-    // Text Chat & Fallback REST Execution
-    // =========================================================================
-    async function sendTextMessage(text) {
-        const query = (text || '').trim();
-        if (!query) return;
-
-        if (chatInput) chatInput.value = '';
-        appendTranscriptMessage('user', query);
-        state.chatHistory.push({ role: 'user', text: query });
-
-        if (state.isCallActive && state.ws && state.ws.readyState === WebSocket.OPEN) {
-            state.ws.send(JSON.stringify({ type: 'text', text: query }));
-            updateLiveBadge('processing', 'Thinking...');
-        } else {
-            updateLiveBadge('processing', 'Jack Thinking...');
-            try {
-                const res = await fetch('/api/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        message: query,
-                        history: state.chatHistory,
-                        api_key: state.apiKey
-                    })
-                });
-
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.detail || 'Chat request failed');
-
-                state.chatHistory.push({ role: 'model', text: data.reply });
-                appendTranscriptMessage('model', data.reply);
-                updateLiveBadge('idle', 'Standby');
-                speakJack(data.reply);
-
-                if (data.actions && data.actions.length > 0) {
-                    loadDashboardStats();
-                    loadAppointments();
-                    loadMessages();
-                    loadDoctors();
-                    loadPatients();
-                }
-
-            } catch (err) {
-                console.error('Chat error:', err);
-                showToast(err.message, 'error');
-                appendTranscriptMessage('system', `Error: ${err.message}`);
-                updateLiveBadge('idle', 'Standby');
-            }
-        }
-    }
-
-    if (sendChatBtn) {
-        sendChatBtn.addEventListener('click', () => {
-            if (chatInput) sendTextMessage(chatInput.value);
-        });
-    }
-    if (chatInput) {
-        chatInput.addEventListener('keydown', (e) => {
+    // Dashboard Quick Action Links
+    if (viewAllApptsLink) viewAllApptsLink.addEventListener('click', () => switchView('appointmentsView'));
+    if (viewAllCallsLink) viewAllCallsLink.addEventListener('click', () => switchView('callHistoryView'));
+    if (stripViewAnalyticsBtn) stripViewAnalyticsBtn.addEventListener('click', () => switchView('analyticsView'));
+
+    // Global Search Bar Handler
+    if (globalSearchInput) {
+        globalSearchInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
-                e.preventDefault();
-                sendTextMessage(chatInput.value);
-            }
-        });
-    }
-    if (micVoiceBtn) {
-        micVoiceBtn.addEventListener('click', () => {
-            if (state.isCallActive) {
-                endVoiceCall();
-            } else {
-                startBrowserVoiceSession();
+                const q = globalSearchInput.value.trim();
+                if (!q) return;
+                switchView('appointmentsView');
+                if (apptSearchInput) {
+                    apptSearchInput.value = q;
+                    renderAppointments();
+                }
             }
         });
     }
 
     // =========================================================================
-    // Data Loading: Dashboard Statistics & Overview
+    // 5. Data Fetching & Dashboard Overview
     // =========================================================================
     async function loadDashboardStats() {
         try {
@@ -941,24 +388,22 @@ document.addEventListener('DOMContentLoaded', () => {
             const stats = await res.json();
 
             if (statTotalAppts) statTotalAppts.textContent = stats.total_appointments || 0;
-            if (statAvailableDocs) statAvailableDocs.textContent = stats.available_doctors || 0;
-            if (statTotalDocsSub) statTotalDocsSub.textContent = `out of ${stats.total_doctors || 10} doctors`;
+            if (statTodayAppts) statTodayAppts.textContent = stats.today_appointments || 0;
             if (statTotalPatients) statTotalPatients.textContent = stats.registered_patients || 0;
-            if (statPendingAppts) statPendingAppts.textContent = stats.pending_appointments || 0;
+            if (statAvailableDocs) statAvailableDocs.textContent = stats.available_doctors || 0;
+            if (statTotalDocsSub) statTotalDocsSub.textContent = `out of ${stats.total_doctors || 10} specialists`;
 
             if (sidebarApptBadge) sidebarApptBadge.textContent = stats.total_appointments || 0;
             if (sidebarDoctorBadge) sidebarDoctorBadge.textContent = stats.available_doctors || 0;
             if (sidebarPatientBadge) sidebarPatientBadge.textContent = stats.registered_patients || 0;
-            if (sidebarMsgBadge) sidebarMsgBadge.textContent = stats.unread_messages || 0;
-            if (notifBadge) notifBadge.textContent = stats.unread_messages || 0;
+            if (sidebarCallBadge) sidebarCallBadge.textContent = stats.unread_messages || 0;
+            if (notifBadge) notifBadge.style.display = (stats.unread_messages > 0) ? 'block' : 'none';
             if (notifDropdownCount) notifDropdownCount.textContent = `${stats.unread_messages || 0} Unread`;
 
-            // Load sub-previews
             loadDashboardApptsPreview();
-            loadDashboardDoctorsPreview();
-            loadDashboardMessagesPreview();
+            loadDashboardCallsPreview();
         } catch (e) {
-            console.error('Error loading stats:', e);
+            console.error('Error loading dashboard stats:', e);
         }
     }
 
@@ -969,21 +414,29 @@ document.addEventListener('DOMContentLoaded', () => {
             state.allAppointments = appts;
 
             if (!dashboardApptsTbody) return;
-
             if (appts.length === 0) {
-                dashboardApptsTbody.innerHTML = `<tr><td colspan="5" class="table-loading">No scheduled consultations found.</td></tr>`;
+                dashboardApptsTbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 2rem; color: var(--text-muted);">No appointments booked yet.</td></tr>`;
                 return;
             }
 
-            const previewList = appts.slice(0, 5);
-            dashboardApptsTbody.innerHTML = previewList.map(a => `
+            const preview = appts.slice(0, 5);
+            dashboardApptsTbody.innerHTML = preview.map(a => `
                 <tr>
-                    <td><strong>👤 ${escapeHtml(a.visitor_name)}</strong></td>
-                    <td>🩺 ${escapeHtml(a.staff_name)} <span style="font-size: 0.72rem; color: var(--text-muted);">(${escapeHtml(a.department)})</span></td>
-                    <td>📅 ${escapeHtml(a.date)} • ⏰ ${escapeHtml(a.time_slot)}</td>
-                    <td><span class="badge-status ${a.status.toLowerCase()}">${escapeHtml(a.status)}</span></td>
                     <td>
-                        <button class="btn-table-action view" onclick="window.viewAppointmentDetails(${a.id})">Details</button>
+                        <span class="cell-patient-name">${escapeHtml(a.visitor_name)}</span>
+                        <span class="cell-subtext">${escapeHtml(a.contact_info)}</span>
+                    </td>
+                    <td>
+                        <span style="font-weight: 600; color: var(--text-heading);">${escapeHtml(a.staff_name)}</span>
+                        <span class="cell-subtext">${escapeHtml(a.department)}</span>
+                    </td>
+                    <td>
+                        <span style="font-weight: 600;">${escapeHtml(a.date)}</span>
+                        <span class="cell-subtext">${escapeHtml(a.time_slot)}</span>
+                    </td>
+                    <td><span class="status-pill ${a.status.toLowerCase()}">${escapeHtml(a.status)}</span></td>
+                    <td>
+                        <button class="btn-secondary btn-sm" onclick="window.viewAppointmentDetails(${a.id})">Details</button>
                     </td>
                 </tr>
             `).join('');
@@ -992,75 +445,63 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function loadDashboardDoctorsPreview() {
+    async function loadDashboardCallsPreview() {
         try {
-            const res = await fetch('/api/doctors');
-            const docs = await res.json();
-            state.allDoctors = docs;
+            const [logsRes, msgsRes] = await Promise.all([
+                fetch('/api/call-logs'),
+                fetch('/api/messages')
+            ]);
+            const logs = await logsRes.json();
+            const msgs = await msgsRes.json();
 
-            if (!dashboardDoctorsMini) return;
-
-            const topDocs = docs.slice(0, 4);
-            dashboardDoctorsMini.innerHTML = topDocs.map(d => `
-                <div class="mini-doctor-item">
-                    <div class="mini-doc-left">
-                        <div class="mini-doc-avatar">${d.avatar_emoji || '🩺'}</div>
-                        <div class="mini-doc-info">
-                            <h4>${escapeHtml(d.name)}</h4>
-                            <p>${escapeHtml(d.specialization)} • ${escapeHtml(d.department)}</p>
-                        </div>
-                    </div>
-                    <button class="btn-book-quick" onclick="window.openDoctorBookingModal(${d.id})">Book</button>
-                </div>
-            `).join('');
-        } catch (e) {
-            console.error('Error previewing doctors:', e);
-        }
-    }
-
-    async function loadDashboardMessagesPreview() {
-        try {
-            const res = await fetch('/api/messages');
-            const msgs = await res.json();
+            state.allCallLogs = logs;
             state.allMessages = msgs;
 
-            if (notifDropdownList) {
-                const unread = msgs.filter(m => !m.is_read);
-                if (unread.length === 0) {
-                    notifDropdownList.innerHTML = '<div class="notif-empty">No unread notifications.</div>';
-                } else {
-                    notifDropdownList.innerHTML = unread.slice(0, 6).map(m => `
-                        <div class="notif-item" onclick="window.markMessageReadAndOpen(${m.id})">
-                            <div class="notif-item-title">✉️ ${escapeHtml(m.caller_name)} (${escapeHtml(m.urgency)})</div>
-                            <div class="notif-item-body">"${escapeHtml(m.message)}"</div>
-                        </div>
-                    `).join('');
-                }
-            }
+            if (!dashboardCallsMini) return;
 
-            if (!dashboardMessagesMini) return;
+            // Combine logs and messages
+            const combined = [];
+            logs.forEach(l => combined.push({
+                type: 'call',
+                title: l.caller_identifier || 'Web Caller',
+                text: l.summary || 'Clinical inquiry handled by Jack AI.',
+                time: l.started_at,
+                duration: `${l.duration_seconds || 45}s`
+            }));
+            msgs.forEach(m => combined.push({
+                type: 'message',
+                title: m.caller_name || 'Visitor Note',
+                text: m.message,
+                time: m.created_at,
+                urgency: m.urgency
+            }));
 
-            if (msgs.length === 0) {
-                dashboardMessagesMini.innerHTML = '<div class="table-loading">No visitor inquiries recorded.</div>';
+            if (combined.length === 0) {
+                dashboardCallsMini.innerHTML = '<div style="text-align:center; padding: 2rem; color: var(--text-muted); font-size: 0.8rem;">No recent receptionist calls recorded.</div>';
                 return;
             }
 
-            dashboardMessagesMini.innerHTML = msgs.slice(0, 3).map(m => `
-                <div class="mini-msg-item">
-                    <div class="mini-msg-header">
-                        <span class="mini-msg-caller">👤 ${escapeHtml(m.caller_name)}</span>
-                        <span class="mini-msg-time">${new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+            dashboardCallsMini.innerHTML = combined.slice(0, 4).map(item => `
+                <div style="background: var(--bg-muted); border-radius: var(--radius-md); padding: 0.75rem 0.95rem; border: 1px solid var(--border-light);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                        <span style="font-size: 0.82rem; font-weight: 700; color: var(--text-heading);">${item.type === 'call' ? '📞' : '✉️'} ${escapeHtml(item.title)}</span>
+                        <span style="font-size: 0.7rem; color: var(--brand-primary); font-weight: 600;">${item.duration || item.urgency || 'Recent'}</span>
                     </div>
-                    <div class="mini-msg-text">"${escapeHtml(m.message)}"</div>
+                    <p style="font-size: 0.78rem; color: var(--text-body); margin: 0; line-height: 1.4;">${escapeHtml(item.text)}</p>
                 </div>
             `).join('');
         } catch (e) {
-            console.error('Error previewing messages:', e);
+            console.error('Error previewing calls:', e);
         }
     }
 
+    if (refreshDashboardBtn) refreshDashboardBtn.addEventListener('click', () => {
+        loadDashboardStats();
+        showToast('Dashboard refreshed', 'info');
+    });
+
     // =========================================================================
-    // Appointments Management Section
+    // 6. Appointments Management View
     // =========================================================================
     async function loadAppointments() {
         try {
@@ -1070,7 +511,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderAppointments();
         } catch (e) {
             console.error('Error loading appointments:', e);
-            if (appointmentsList) appointmentsList.innerHTML = '<tr><td colspan="9" class="table-loading">Failed to load appointments.</td></tr>';
+            if (appointmentsList) appointmentsList.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 2rem; color: #ef4444;">Failed to load appointments.</td></tr>';
         }
     }
 
@@ -1095,13 +536,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (countFilterCancelled) countFilterCancelled.textContent = countCancelled;
 
         let filtered = state.allAppointments.filter(a => {
-            // Text Search
             if (q) {
-                const searchCorpus = `${a.visitor_name} ${a.staff_name} ${a.department} ${a.date} ${a.purpose}`.toLowerCase();
-                if (!searchCorpus.includes(q)) return false;
+                const text = `${a.visitor_name} ${a.staff_name} ${a.department} ${a.date} ${a.purpose}`.toLowerCase();
+                if (!text.includes(q)) return false;
             }
-
-            // Tab Filter
             if (filter === 'today') return a.date === todayStr && a.status !== 'Cancelled';
             if (filter === 'upcoming') return a.date >= todayStr && a.status === 'Confirmed';
             if (filter === 'completed') return a.status === 'Completed';
@@ -1110,7 +548,18 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         if (filtered.length === 0) {
-            appointmentsList.innerHTML = '<tr><td colspan="9" class="table-loading">No matching appointments found.</td></tr>';
+            appointmentsList.innerHTML = `
+                <tr>
+                    <td colspan="6">
+                        <div class="empty-state-box">
+                            <span class="empty-state-icon">📅</span>
+                            <h4 class="empty-state-title">No appointments found</h4>
+                            <p class="empty-state-desc">There are no consultations matching the selected filter or search keyword.</p>
+                            <button class="btn-primary btn-sm" onclick="window.openDoctorBookingModal()">Schedule New Consultation</button>
+                        </div>
+                    </td>
+                </tr>
+            `;
             return;
         }
 
@@ -1120,19 +569,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
             return `
                 <tr>
-                    <td><span style="font-family: var(--font-mono); font-size: 0.76rem; color: var(--cyan);">#${a.id}</span></td>
-                    <td><strong>👤 ${escapeHtml(a.visitor_name)}</strong></td>
-                    <td><span style="font-family: var(--font-mono); font-size: 0.74rem;">${escapeHtml(a.contact_info)}</span></td>
-                    <td>🩺 ${escapeHtml(a.staff_name)}</td>
-                    <td><span style="font-size: 0.74rem; color: var(--text-muted);">${escapeHtml(a.department)}</span></td>
-                    <td>📅 ${escapeHtml(a.date)} • ⏰ ${escapeHtml(a.time_slot)}</td>
-                    <td><span style="font-size: 0.76rem; max-width: 140px; display: inline-block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">"${escapeHtml(a.purpose || 'Consultation')}"</span></td>
-                    <td><span class="badge-status ${a.status.toLowerCase()}">${escapeHtml(a.status)}</span></td>
+                    <td>
+                        <span class="cell-patient-name">👤 ${escapeHtml(a.visitor_name)}</span>
+                        <span class="cell-subtext">${escapeHtml(a.contact_info)}</span>
+                    </td>
+                    <td>
+                        <span style="font-weight: 600; color: var(--text-heading);">🩺 ${escapeHtml(a.staff_name)}</span>
+                        <span class="cell-subtext">${escapeHtml(a.department)}</span>
+                    </td>
+                    <td>
+                        <span style="font-weight: 700; color: var(--text-heading);">📅 ${escapeHtml(a.date)}</span>
+                        <span class="cell-subtext">⏰ ${escapeHtml(a.time_slot)}</span>
+                    </td>
+                    <td>
+                        <span style="font-size: 0.78rem; max-width: 180px; display: inline-block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                            "${escapeHtml(a.purpose || 'General Consultation')}"
+                        </span>
+                    </td>
+                    <td>
+                        <span class="status-pill ${a.status.toLowerCase()}">${escapeHtml(a.status)}</span>
+                    </td>
                     <td>
                         <div style="display: flex; gap: 0.35rem;">
-                            <button class="btn-table-action view" onclick="window.viewAppointmentDetails(${a.id})">View</button>
-                            ${!isCancelled && !isCompleted ? `<button class="btn-table-action" style="border: 1px solid var(--border-medium); color: #60a5fa;" onclick="window.markAppointmentCompleted(${a.id})">Done</button>` : ''}
-                            ${!isCancelled ? `<button class="btn-table-action cancel" onclick="window.cancelAppointment(${a.id})">Cancel</button>` : ''}
+                            <button class="btn-secondary btn-sm" onclick="window.viewAppointmentDetails(${a.id})">Details</button>
+                            ${!isCancelled && !isCompleted ? `<button class="btn-secondary btn-sm" style="color: #2563eb;" onclick="window.markAppointmentCompleted(${a.id})">Done</button>` : ''}
+                            ${!isCancelled ? `<button class="btn-secondary btn-sm" style="color: #dc2626;" onclick="window.cancelAppointment(${a.id})">Cancel</button>` : ''}
                         </div>
                     </td>
                 </tr>
@@ -1141,9 +602,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (apptFilterGroup) {
-        apptFilterGroup.querySelectorAll('.filter-pill').forEach(btn => {
+        apptFilterGroup.querySelectorAll('.filter-tab-btn').forEach(btn => {
             btn.addEventListener('click', () => {
-                apptFilterGroup.querySelectorAll('.filter-pill').forEach(b => b.classList.remove('active'));
+                apptFilterGroup.querySelectorAll('.filter-tab-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 state.currentApptFilter = btn.getAttribute('data-filter');
                 renderAppointments();
@@ -1151,41 +612,35 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    if (apptSearchInput) {
-        apptSearchInput.addEventListener('input', () => renderAppointments());
-    }
+    if (apptSearchInput) apptSearchInput.addEventListener('input', renderAppointments);
+    if (refreshApptsBtn) refreshApptsBtn.addEventListener('click', () => {
+        loadAppointments();
+        showToast('Appointments refreshed', 'info');
+    });
 
     // =========================================================================
-    // Doctors Directory Section
+    // 7. Doctors Directory View (with Admin-Only Add Doctor Check)
     // =========================================================================
-    async function loadDoctors(searchQuery = '', specialization = '') {
+    async function loadDoctors() {
         try {
-            let url = '/api/doctors';
-            const params = new URLSearchParams();
-            if (searchQuery) params.set('q', searchQuery);
-            if (specialization) params.set('specialization', specialization);
-            if (params.toString()) url += '?' + params.toString();
+            const [docsRes, specsRes] = await Promise.all([
+                fetch('/api/doctors'),
+                fetch('/api/doctors/specializations/list')
+            ]);
+            const docs = await docsRes.json();
+            const specs = await specsRes.json();
 
-            const res = await fetch(url);
-            const doctors = await res.json();
-            state.allDoctors = doctors;
+            state.allDoctors = docs;
 
-            // Load specializations in filter dropdown if empty
-            if (doctorSpecFilter && doctorSpecFilter.options.length <= 1) {
-                const specRes = await fetch('/api/doctors/specializations/list');
-                const specs = await specRes.json();
-                specs.forEach(s => {
-                    const opt = document.createElement('option');
-                    opt.value = s;
-                    opt.textContent = s;
-                    doctorSpecFilter.appendChild(opt);
-                });
+            if (doctorSpecFilter && specs.length > 0) {
+                doctorSpecFilter.innerHTML = '<option value="all">All Specializations</option>' +
+                    specs.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
             }
 
             renderDoctors();
         } catch (e) {
             console.error('Error loading doctors:', e);
-            if (doctorsList) doctorsList.innerHTML = '<div class="table-loading">Failed to load doctors directory.</div>';
+            if (doctorsList) doctorsList.innerHTML = '<div style="color: #ef4444; padding: 2rem;">Failed to load medical staff directory.</div>';
         }
     }
 
@@ -1193,72 +648,95 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!doctorsList) return;
 
         const q = (doctorSearchInput ? doctorSearchInput.value : '').toLowerCase().trim();
-        const spec = doctorSpecFilter ? doctorSpecFilter.value : '';
+        const spec = doctorSpecFilter ? doctorSpecFilter.value : 'all';
 
         let filtered = state.allDoctors.filter(d => {
             if (q) {
-                const corpus = `${d.name} ${d.specialization} ${d.department} ${d.bio}`.toLowerCase();
-                if (!corpus.includes(q)) return false;
+                const text = `${d.name} ${d.specialization} ${d.department} ${d.qualification}`.toLowerCase();
+                if (!text.includes(q)) return false;
             }
-            if (spec && d.specialization !== spec) return false;
+            if (spec !== 'all' && d.specialization !== spec) return false;
             return true;
         });
 
         if (filtered.length === 0) {
-            doctorsList.innerHTML = '<div class="table-loading">No specialist doctors found matching your criteria.</div>';
+            doctorsList.innerHTML = `
+                <div class="empty-state-box" style="grid-column: 1 / -1;">
+                    <span class="empty-state-icon">🩺</span>
+                    <h4 class="empty-state-title">No specialists found</h4>
+                    <p class="empty-state-desc">Try clearing your search query or choosing a different specialization.</p>
+                </div>
+            `;
             return;
         }
 
-        doctorsList.innerHTML = filtered.map(d => {
-            const isAvail = d.status === 'Available';
-            return `
-                <div class="doctor-card">
-                    <span class="doctor-status-pill ${isAvail ? 'available' : 'away'}">${escapeHtml(d.status)}</span>
-                    <div class="doctor-card-top">
-                        <div class="doctor-avatar-circle">${d.avatar_emoji || '🩺'}</div>
-                        <div class="doctor-card-info">
-                            <h4>${escapeHtml(d.name)}</h4>
-                            <span class="doctor-spec-tag">${escapeHtml(d.specialization)}</span>
-                            <span class="doctor-qual-tag">${escapeHtml(d.qualification)} • ${escapeHtml(d.department)}</span>
-                        </div>
-                    </div>
-                    <div class="doctor-details-grid">
-                        <div class="detail-item">
-                            <span class="detail-item-label">Experience</span>
-                            <span class="detail-item-val">${d.experience_years} Years</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-item-label">Consultation Fee</span>
-                            <span class="detail-item-val" style="color: var(--cyan);">${escapeHtml(d.consultation_fee || '₹500')}</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-item-label">Rating</span>
-                            <span class="detail-item-val">⭐ ${d.rating || 4.8} / 5</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-item-label">Working Days</span>
-                            <span class="detail-item-val">${escapeHtml(d.available_days || 'Mon-Fri')}</span>
-                        </div>
-                    </div>
-                    <div class="doctor-slots-text">
-                        <strong>Available Slots:</strong> ${escapeHtml(d.available_slots || '09:00 AM - 05:00 PM')}
-                    </div>
-                    <div class="doctor-card-actions">
-                        <button class="btn-book-doctor-full" onclick="window.openDoctorBookingModal(${d.id})">
-                            📅 Book Consultation
-                        </button>
-                        <button class="btn-delete-doc" title="Remove Doctor" onclick="window.removeDoctor(${d.id})">🗑️</button>
+        doctorsList.innerHTML = filtered.map(d => `
+            <div class="doctor-profile-card">
+                <span class="status-pill ${d.status.toLowerCase()} doctor-status-badge">${escapeHtml(d.status)}</span>
+                <div class="doctor-card-header">
+                    <div class="doctor-avatar-box">${d.avatar_emoji || '🩺'}</div>
+                    <div class="doctor-header-info">
+                        <h4 class="doctor-name-title">${escapeHtml(d.name)}</h4>
+                        <span class="doctor-spec-label">${escapeHtml(d.specialization)}</span>
+                        <span class="doctor-dept-label">${escapeHtml(d.department)} • ${escapeHtml(d.qualification || 'MBBS, MD')}</span>
                     </div>
                 </div>
-            `;
-        }).join('');
+
+                <div class="doctor-specs-list">
+                    <div>
+                        <span class="doc-spec-item-label">Consultation Fee</span>
+                        <span class="doc-spec-item-value" style="color: var(--brand-primary);">${escapeHtml(d.consultation_fee || '₹500')}</span>
+                    </div>
+                    <div>
+                        <span class="doc-spec-item-label">Experience</span>
+                        <span class="doc-spec-item-value">${d.experience_years || 5} Years</span>
+                    </div>
+                    <div>
+                        <span class="doc-spec-item-label">Patient Rating</span>
+                        <span class="doc-spec-item-value">⭐ ${d.rating || 4.8} / 5</span>
+                    </div>
+                    <div>
+                        <span class="doc-spec-item-label">Phone Ext.</span>
+                        <span class="doc-spec-item-value" style="font-family: var(--font-mono);">${d.phone_extension || '101'}</span>
+                    </div>
+                </div>
+
+                <div class="doctor-schedule-strip">
+                    <div><strong>Available Days:</strong> ${escapeHtml(d.available_days || 'Mon, Wed, Fri')}</div>
+                    <div><strong>Slots:</strong> ${escapeHtml(d.available_slots ? d.available_slots.split(',').slice(0, 3).join(', ') + '...' : '09:00 AM, 11:00 AM, 02:00 PM')}</div>
+                </div>
+
+                <div class="doctor-card-footer">
+                    <button class="btn-primary btn-sm" style="flex: 1; justify-content: center;" onclick="window.openDoctorBookingModal(${d.id})">
+                        📅 Book Consultation
+                    </button>
+                </div>
+            </div>
+        `).join('');
     }
 
-    if (doctorSearchInput) doctorSearchInput.addEventListener('input', () => renderDoctors());
-    if (doctorSpecFilter) doctorSpecFilter.addEventListener('change', () => renderDoctors());
+    if (doctorSearchInput) doctorSearchInput.addEventListener('input', renderDoctors);
+    if (doctorSpecFilter) doctorSpecFilter.addEventListener('change', renderDoctors);
+    if (refreshDoctorsBtn) refreshDoctorsBtn.addEventListener('click', () => {
+        loadDoctors();
+        showToast('Doctors directory refreshed', 'info');
+    });
+
+    // Admin Only Check for Register Doctor
+    function handleAdminAddDoctorClick() {
+        if (!state.currentUser) {
+            showToast('Administrator privileges required. Please sign in to register doctors.', 'error');
+            openAuthModal();
+            return;
+        }
+        if (addDoctorModal) addDoctorModal.classList.add('show');
+    }
+
+    if (adminAddDoctorBtn) adminAddDoctorBtn.addEventListener('click', handleAdminAddDoctorClick);
+    if (stripNewDocBtn) stripNewDocBtn.addEventListener('click', handleAdminAddDoctorClick);
 
     // =========================================================================
-    // Patients Directory Section
+    // 8. Patients Registry View
     // =========================================================================
     async function loadPatients() {
         try {
@@ -1268,7 +746,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderPatients();
         } catch (e) {
             console.error('Error loading patients:', e);
-            if (patientsList) patientsList.innerHTML = '<tr><td colspan="8" class="table-loading">Failed to load patient records.</td></tr>';
+            if (patientsList) patientsList.innerHTML = '<tr><td colspan="7" style="text-align:center; padding: 2rem; color: #ef4444;">Failed to load patients.</td></tr>';
         }
     }
 
@@ -1276,208 +754,720 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!patientsList) return;
 
         const q = (patientSearchInput ? patientSearchInput.value : '').toLowerCase().trim();
+
         let filtered = state.allPatients.filter(p => {
             if (q) {
-                const corpus = `${p.name} ${p.contact_info} ${p.last_doctor} ${p.last_department}`.toLowerCase();
-                if (!corpus.includes(q)) return false;
+                const text = `${p.name} ${p.contact_info} ${p.last_doctor} ${p.last_department}`.toLowerCase();
+                if (!text.includes(q)) return false;
             }
             return true;
         });
 
         if (filtered.length === 0) {
-            patientsList.innerHTML = '<tr><td colspan="8" class="table-loading">No matching patient records found.</td></tr>';
+            patientsList.innerHTML = `
+                <tr>
+                    <td colspan="7">
+                        <div class="empty-state-box">
+                            <span class="empty-state-icon">👥</span>
+                            <h4 class="empty-state-title">No patient records found</h4>
+                            <p class="empty-state-desc">Patient records automatically appear when appointments are scheduled.</p>
+                        </div>
+                    </td>
+                </tr>
+            `;
             return;
         }
 
         patientsList.innerHTML = filtered.map(p => `
             <tr>
-                <td><strong>👤 ${escapeHtml(p.name)}</strong></td>
-                <td><span style="font-family: var(--font-mono); font-size: 0.74rem;">${escapeHtml(p.contact_info)}</span></td>
-                <td><span class="nav-badge cyan">${p.total_appointments} Consultation${p.total_appointments > 1 ? 's' : ''}</span></td>
-                <td>📅 ${escapeHtml(p.last_visit_date || 'N/A')}</td>
-                <td>🩺 ${escapeHtml(p.last_doctor || 'Clinic Specialist')}</td>
-                <td><span style="font-size: 0.72rem; color: var(--text-muted);">${escapeHtml(p.last_department || 'General')}</span></td>
-                <td><span class="badge-status ${(p.last_status || 'confirmed').toLowerCase()}">${escapeHtml(p.last_status || 'Confirmed')}</span></td>
                 <td>
-                    <button class="btn-table-action view" onclick="window.scheduleVisitForPatient('${escapeHtml(p.name)}', '${escapeHtml(p.contact_info)}')">Schedule Visit</button>
+                    <span class="cell-patient-name">👤 ${escapeHtml(p.name)}</span>
+                </td>
+                <td>
+                    <span style="font-family: var(--font-mono); font-size: 0.76rem;">${escapeHtml(p.contact_info || 'N/A')}</span>
+                </td>
+                <td>
+                    <span style="font-weight: 700; color: var(--brand-primary);">${p.total_appointments} Consultation${p.total_appointments > 1 ? 's' : ''}</span>
+                </td>
+                <td>
+                    <span style="font-weight: 600; color: var(--text-heading);">${escapeHtml(p.last_doctor || 'General Consultation')}</span>
+                    <span class="cell-subtext">${escapeHtml(p.last_department || 'General Medicine')}</span>
+                </td>
+                <td>
+                    <span>${escapeHtml(p.last_visit_date || 'Recent')}</span>
+                </td>
+                <td>
+                    <span class="status-pill ${p.last_status ? p.last_status.toLowerCase() : 'confirmed'}">${escapeHtml(p.last_status || 'Active')}</span>
+                </td>
+                <td>
+                    <button class="btn-secondary btn-sm" onclick="window.scheduleVisitForPatient('${escapeHtml(p.name)}', '${escapeHtml(p.contact_info)}')">
+                        📅 Schedule
+                    </button>
                 </td>
             </tr>
         `).join('');
     }
 
-    if (patientSearchInput) patientSearchInput.addEventListener('input', () => renderPatients());
+    if (patientSearchInput) patientSearchInput.addEventListener('input', renderPatients);
+    if (refreshPatientsBtn) refreshPatientsBtn.addEventListener('click', () => {
+        loadPatients();
+        showToast('Patient records refreshed', 'info');
+    });
+    if (patientNewApptBtn) patientNewApptBtn.addEventListener('click', () => window.openDoctorBookingModal());
 
     // =========================================================================
-    // Caller Messages Section
+    // 9. Call History & Messages View
     // =========================================================================
-    async function loadMessages() {
+    async function loadCallHistory() {
         try {
-            const res = await fetch('/api/messages');
-            const msgs = await res.json();
+            const [logsRes, msgsRes] = await Promise.all([
+                fetch('/api/call-logs'),
+                fetch('/api/messages')
+            ]);
+            const logs = await logsRes.json();
+            const msgs = await msgsRes.json();
+
+            state.allCallLogs = logs;
             state.allMessages = msgs;
-            renderMessages();
+            renderCallHistory();
         } catch (e) {
-            console.error('Error loading messages:', e);
-            if (messagesList) messagesList.innerHTML = '<div class="table-loading">Failed to load caller messages.</div>';
+            console.error('Error loading call history:', e);
+            if (callHistoryList) callHistoryList.innerHTML = '<div style="color: #ef4444; padding: 2rem;">Failed to load call history.</div>';
         }
     }
 
-    function renderMessages() {
-        if (!messagesList) return;
+    function renderCallHistory() {
+        if (!callHistoryList) return;
 
-        const filter = state.currentMsgFilter;
-        const countAll = state.allMessages.length;
-        const countUnread = state.allMessages.filter(m => !m.is_read).length;
-        const countUrgent = state.allMessages.filter(m => m.urgency === 'Urgent').length;
+        const q = (callSearchInput ? callSearchInput.value : '').toLowerCase().trim();
+        const filter = state.currentCallFilter;
 
-        if (msgFilterAllCount) msgFilterAllCount.textContent = countAll;
-        if (msgFilterUnreadCount) msgFilterUnreadCount.textContent = countUnread;
-        if (msgFilterUrgentCount) msgFilterUrgentCount.textContent = countUrgent;
+        // Unify logs and messages
+        const unified = [];
+        state.allCallLogs.forEach(l => {
+            unified.push({
+                kind: 'voice',
+                id: l.id,
+                title: l.caller_identifier || 'Web Voice Caller',
+                summary: l.summary || 'Real-time AI voice receptionist clinical consultation.',
+                action: l.action_taken || 'Inquiry Handled by Jack',
+                duration: `${l.duration_seconds || 45}s`,
+                timestamp: l.started_at,
+                urgency: 'Normal'
+            });
+        });
 
-        let filtered = state.allMessages.filter(m => {
-            if (filter === 'unread') return !m.is_read;
-            if (filter === 'urgent') return m.urgency === 'Urgent';
+        state.allMessages.forEach(m => {
+            unified.push({
+                kind: 'message',
+                id: m.id,
+                title: m.caller_name || 'Caller Voicemail',
+                summary: `"${m.message}" (Recipient: ${m.recipient_name || 'Front Desk'})`,
+                action: m.is_read ? 'Reviewed' : 'Pending Review',
+                contact: m.contact_info,
+                duration: 'Voicemail Note',
+                timestamp: m.created_at,
+                urgency: m.urgency || 'Normal',
+                is_read: m.is_read
+            });
+        });
+
+        // Counts
+        const countAll = unified.length;
+        const countVoice = unified.filter(u => u.kind === 'voice').length;
+        const countMsg = unified.filter(u => u.kind === 'message').length;
+        const countUrgent = unified.filter(u => u.urgency.toLowerCase() === 'urgent').length;
+
+        if (countCallsAll) countCallsAll.textContent = countAll;
+        if (countCallsVoice) countCallsVoice.textContent = countVoice;
+        if (countCallsMsg) countCallsMsg.textContent = countMsg;
+        if (countCallsUrgent) countCallsUrgent.textContent = countUrgent;
+
+        // Filtering
+        let filtered = unified.filter(item => {
+            if (q) {
+                const text = `${item.title} ${item.summary} ${item.action}`.toLowerCase();
+                if (!text.includes(q)) return false;
+            }
+            if (filter === 'voice') return item.kind === 'voice';
+            if (filter === 'messages') return item.kind === 'message';
+            if (filter === 'urgent') return item.urgency.toLowerCase() === 'urgent';
             return true;
         });
 
         if (filtered.length === 0) {
-            messagesList.innerHTML = '<div class="table-loading">No caller messages found in this category.</div>';
+            callHistoryList.innerHTML = `
+                <div class="empty-state-box">
+                    <span class="empty-state-icon">📞</span>
+                    <h4 class="empty-state-title">No call records found</h4>
+                    <p class="empty-state-desc">Live phone interactions and visitor messages will appear here.</p>
+                </div>
+            `;
             return;
         }
 
-        messagesList.innerHTML = filtered.map(m => `
-            <div class="message-card ${!m.is_read ? 'unread' : ''} ${m.urgency === 'Urgent' ? 'urgent' : ''}">
-                <div class="message-card-header">
-                    <div>
-                        <div class="msg-caller-name">👤 ${escapeHtml(m.caller_name)}</div>
-                        <div class="msg-caller-phone">📞 ${escapeHtml(m.contact_info)}</div>
+        callHistoryList.innerHTML = filtered.map(item => `
+            <div class="call-item-card">
+                <div class="call-item-left">
+                    <div class="call-type-icon ${item.kind === 'message' ? 'voicemail' : ''}">
+                        ${item.kind === 'voice' ? '🎙️' : '✉️'}
                     </div>
-                    <span class="badge-status ${m.urgency === 'Urgent' ? 'cancelled' : 'confirmed'}">${escapeHtml(m.urgency)}</span>
-                </div>
-                <div class="msg-for-tag">Recipient: <strong>${escapeHtml(m.recipient_name)}</strong></div>
-                <div class="msg-body-content">"${escapeHtml(m.message)}"</div>
-                <div class="message-card-footer">
-                    <span>${new Date(m.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-                    <div class="msg-actions-group">
-                        ${!m.is_read ? `<button class="btn-table-action view" onclick="window.markMessageRead(${m.id})">Mark Read</button>` : ''}
-                        <button class="btn-table-action cancel" onclick="window.deleteMessage(${m.id})">Delete</button>
+                    <div class="call-details">
+                        <div class="call-title-row">
+                            <h4 class="caller-name-heading">${escapeHtml(item.title)}</h4>
+                            <span class="status-pill ${item.urgency.toLowerCase() === 'urgent' ? 'cancelled' : 'confirmed'}">${escapeHtml(item.urgency)}</span>
+                            <span style="font-size: 0.72rem; color: var(--brand-primary); font-weight: 700;">${item.duration}</span>
+                        </div>
+                        <p class="call-summary-text">${escapeHtml(item.summary)}</p>
+                        <div class="call-meta-row">
+                            <span>🕒 ${item.timestamp ? new Date(item.timestamp).toLocaleString() : 'Recent'}</span>
+                            <span>•</span>
+                            <span>⚡ Outcome: <strong>${escapeHtml(item.action)}</strong></span>
+                            ${item.contact ? `<span>• Contact: <strong>${escapeHtml(item.contact)}</strong></span>` : ''}
+                        </div>
                     </div>
                 </div>
+                ${item.kind === 'message' && !item.is_read ? `
+                    <button class="btn-secondary btn-sm" onclick="window.markMessageReadAndOpen(${item.id})">Mark Read</button>
+                ` : ''}
             </div>
         `).join('');
     }
 
-    if (msgFilterGroup) {
-        msgFilterGroup.querySelectorAll('.filter-pill').forEach(btn => {
+    if (callHistoryFilterGroup) {
+        callHistoryFilterGroup.querySelectorAll('.filter-tab-btn').forEach(btn => {
             btn.addEventListener('click', () => {
-                msgFilterGroup.querySelectorAll('.filter-pill').forEach(b => b.classList.remove('active'));
+                callHistoryFilterGroup.querySelectorAll('.filter-tab-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
-                state.currentMsgFilter = btn.getAttribute('data-msg-filter');
-                renderMessages();
+                state.currentCallFilter = btn.getAttribute('data-call-filter');
+                renderCallHistory();
             });
         });
     }
 
-    // =========================================================================
-    // Corporate Staff Directory & FAQs
-    // =========================================================================
-    async function loadDirectory(searchQuery = '') {
-        try {
-            const url = searchQuery ? `/api/directory?q=${encodeURIComponent(searchQuery)}` : '/api/directory';
-            const res = await fetch(url);
-            const staff = await res.json();
+    if (callSearchInput) callSearchInput.addEventListener('input', renderCallHistory);
+    if (refreshCallsBtn) refreshCallsBtn.addEventListener('click', () => {
+        loadCallHistory();
+        showToast('Call history refreshed', 'info');
+    });
 
-            if (!directoryList) return;
-            if (staff.length === 0) {
-                directoryList.innerHTML = '<div class="table-loading">No staff found matching query.</div>';
-                return;
+    // =========================================================================
+    // 10. Analytics Dashboard
+    // =========================================================================
+    async function loadAnalytics() {
+        try {
+            const [analyticsRes, statsRes] = await Promise.all([
+                fetch('/api/analytics'),
+                fetch('/api/stats')
+            ]);
+            const data = await analyticsRes.json();
+            const stats = await statsRes.json();
+
+            // KPIs
+            if (kpiResolutionRate) kpiResolutionRate.textContent = data.call_metrics.first_call_resolution_rate || '92.4%';
+            if (kpiAvgDuration) kpiAvgDuration.textContent = `${data.call_metrics.avg_duration_seconds || 45}s`;
+            if (kpiAiHandled) kpiAiHandled.textContent = data.call_metrics.ai_handled_rate || '88.6%';
+            if (kpiDocUtilization) {
+                const avail = stats.available_doctors || 8;
+                const total = stats.total_doctors || 10;
+                const pct = Math.round((avail / Math.max(total, 1)) * 100);
+                kpiDocUtilization.textContent = `${pct}%`;
             }
 
-            directoryList.innerHTML = staff.map(s => `
-                <div class="staff-card">
-                    <div class="staff-card-header">
-                        <h4>👤 ${escapeHtml(s.name)}</h4>
-                        <span class="badge-status confirmed">${escapeHtml(s.status)}</span>
-                    </div>
-                    <p style="font-size: 0.78rem; color: var(--cyan); margin-bottom: 0.35rem;">${escapeHtml(s.title)} • ${escapeHtml(s.department)}</p>
-                    <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.65rem;">${escapeHtml(s.bio || 'Corporate team member')}</p>
-                    <div style="font-size: 0.74rem; color: var(--text-secondary); display: flex; justify-content: space-between;">
-                        <span>Ext: <strong>${escapeHtml(s.phone_extension)}</strong></span>
-                        <span style="font-family: var(--font-mono);">${escapeHtml(s.email)}</span>
-                    </div>
-                </div>
-            `).join('');
+            // 1. Department Breakdown Bars
+            if (analyticsDeptBars) {
+                const depts = data.department_breakdown || [];
+                const totalDeptCounts = depts.reduce((sum, d) => sum + d.count, 0) || 1;
+                if (depts.length === 0) {
+                    analyticsDeptBars.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem;">No department appointment data yet.</div>';
+                } else {
+                    analyticsDeptBars.innerHTML = depts.map(d => {
+                        const pct = Math.round((d.count / totalDeptCounts) * 100);
+                        return `
+                            <div class="analytics-bar-item">
+                                <div class="bar-item-header">
+                                    <span>🏥 ${escapeHtml(d.department)}</span>
+                                    <span>${d.count} (${pct}%)</span>
+                                </div>
+                                <div class="bar-track">
+                                    <div class="bar-fill-cyan" style="width: ${pct}%;"></div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            }
+
+            // 2. Status Breakdown Bars
+            if (analyticsStatusBars) {
+                const statuses = data.status_breakdown || [];
+                const totalStatus = statuses.reduce((sum, s) => sum + s.count, 0) || 1;
+                if (statuses.length === 0) {
+                    analyticsStatusBars.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem;">No status data available.</div>';
+                } else {
+                    analyticsStatusBars.innerHTML = statuses.map(s => {
+                        const pct = Math.round((s.count / totalStatus) * 100);
+                        let fillClass = 'bar-fill-cyan';
+                        if (s.status === 'Confirmed') fillClass = 'bar-fill-cyan';
+                        else if (s.status === 'Completed') fillClass = 'bar-fill-emerald';
+                        else if (s.status === 'Cancelled') fillClass = 'bar-fill-rose';
+                        else if (s.status === 'Pending') fillClass = 'bar-fill-amber';
+
+                        return `
+                            <div class="analytics-bar-item">
+                                <div class="bar-item-header">
+                                    <span>${escapeHtml(s.status)}</span>
+                                    <span>${s.count} (${pct}%)</span>
+                                </div>
+                                <div class="bar-track">
+                                    <div class="${fillClass}" style="width: ${pct}%;"></div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            }
+
+            // 3. 7-Day Trend Bars
+            if (analyticsDailyTrend) {
+                const trends = data.daily_trend || [];
+                const maxCount = Math.max(...trends.map(t => t.count), 5);
+                if (trends.length === 0) {
+                    analyticsDailyTrend.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem;">Booking volume history will appear here.</div>';
+                } else {
+                    analyticsDailyTrend.innerHTML = trends.map(t => {
+                        const pct = Math.round((t.count / maxCount) * 100);
+                        return `
+                            <div class="analytics-bar-item">
+                                <div class="bar-item-header">
+                                    <span>📅 ${escapeHtml(t.date)}</span>
+                                    <span>${t.count} Visit${t.count > 1 ? 's' : ''}</span>
+                                </div>
+                                <div class="bar-track">
+                                    <div class="bar-fill-cyan" style="width: ${pct}%;"></div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            }
+
+            // 4. Doctor Workload Bars
+            if (analyticsDocLoad) {
+                const docs = data.doctor_load || [];
+                const maxDocAppts = Math.max(...docs.map(d => d.appointments_count), 5);
+                if (docs.length === 0) {
+                    analyticsDocLoad.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem;">Doctor workload metrics will update with consultations.</div>';
+                } else {
+                    analyticsDocLoad.innerHTML = docs.map(d => {
+                        const pct = Math.round((d.appointments_count / maxDocAppts) * 100);
+                        return `
+                            <div class="analytics-bar-item">
+                                <div class="bar-item-header">
+                                    <span>🩺 ${escapeHtml(d.doctor_name)}</span>
+                                    <span>${d.appointments_count} Bookings</span>
+                                </div>
+                                <div class="bar-track">
+                                    <div class="bar-fill-emerald" style="width: ${pct}%;"></div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            }
         } catch (e) {
-            console.error('Error loading directory:', e);
+            console.error('Error loading analytics:', e);
         }
     }
 
-    if (directorySearchInput) {
-        directorySearchInput.addEventListener('input', () => loadDirectory(directorySearchInput.value));
+    if (refreshAnalyticsBtn) refreshAnalyticsBtn.addEventListener('click', () => {
+        loadAnalytics();
+        showToast('Analytics refreshed', 'info');
+    });
+
+    // =========================================================================
+    // 11. Settings Sync & Configuration
+    // =========================================================================
+    function syncSettingsInputs() {
+        if (settingsApiKeyInput) settingsApiKeyInput.value = state.apiKey;
+        if (settingsVoiceSelect) settingsVoiceSelect.value = state.voice;
+        if (settingsCustomWs) settingsCustomWs.value = state.customWsUrl;
     }
 
-    async function loadCompanyDetails() {
-        try {
-            const res = await fetch('/api/company');
-            const data = await res.json();
-            state.companyInfo = data;
+    function saveSettings(key, voice, customWs) {
+        state.apiKey = key;
+        state.voice = voice;
+        state.customWsUrl = customWs;
 
-            if (faqList && data.knowledge_base) {
-                faqList.innerHTML = data.knowledge_base.map(kb => `
-                    <div class="faq-card">
-                        <h4 style="font-size: 0.92rem; color: #fff; margin-bottom: 0.3rem;">🏢 ${escapeHtml(kb.title)}</h4>
-                        <span class="nav-badge cyan" style="margin-bottom: 0.65rem; display: inline-block;">${escapeHtml(kb.category)}</span>
-                        <p style="font-size: 0.78rem; color: var(--text-secondary); line-height: 1.5;">${escapeHtml(kb.content)}</p>
-                    </div>
-                `).join('');
+        localStorage.setItem('gemini_api_key', key);
+        localStorage.setItem('receptionist_voice', voice);
+        localStorage.setItem('custom_ws_url', customWs);
+
+        if (key) {
+            fetch('/api/config/key', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ api_key: key })
+            }).catch(() => {});
+        }
+
+        showToast('Settings saved successfully', 'success');
+    }
+
+    if (saveMainSettingsBtn) {
+        saveMainSettingsBtn.addEventListener('click', () => {
+            const key = settingsApiKeyInput.value.trim();
+            const voice = settingsVoiceSelect.value;
+            const customWs = settingsCustomWs.value.trim();
+            saveSettings(key, voice, customWs);
+        });
+    }
+
+    if (saveSettingsBtn) {
+        saveSettingsBtn.addEventListener('click', () => {
+            const key = apiKeyInput.value.trim();
+            const voice = voiceSelect.value;
+            const customWs = customWsUrlInput.value.trim();
+            saveSettings(key, voice, customWs);
+            if (settingsModal) settingsModal.classList.remove('show');
+        });
+    }
+
+    function openSettingsModal() {
+        if (apiKeyInput) apiKeyInput.value = state.apiKey;
+        if (voiceSelect) voiceSelect.value = state.voice;
+        if (customWsUrlInput) customWsUrlInput.value = state.customWsUrl;
+        if (settingsModal) settingsModal.classList.add('show');
+    }
+
+    if (openSettingsBtn) openSettingsBtn.addEventListener('click', openSettingsModal);
+    if (headerSettingsBtn) headerSettingsBtn.addEventListener('click', openSettingsModal);
+    if (closeSettingsBtn) closeSettingsBtn.addEventListener('click', () => settingsModal.classList.remove('show'));
+    if (cancelSettingsBtn) cancelSettingsBtn.addEventListener('click', () => settingsModal.classList.remove('show'));
+
+    // =========================================================================
+    // 12. Floating Jack AI Voice & Chat Assistant
+    // =========================================================================
+    function openFloatingAssistant() {
+        state.isAssistantOpen = true;
+        if (floatingAssistantWindow) floatingAssistantWindow.classList.add('show');
+        if (assistantTextInput) assistantTextInput.focus();
+    }
+
+    function closeFloatingAssistant() {
+        state.isAssistantOpen = false;
+        if (floatingAssistantWindow) floatingAssistantWindow.classList.remove('show');
+        if (state.isCallActive) endVoiceCall();
+    }
+
+    if (quickTriggerJackBtn) quickTriggerJackBtn.addEventListener('click', openFloatingAssistant);
+    if (quickTalkBtn) quickTalkBtn.addEventListener('click', openFloatingAssistant);
+    if (heroTalkJackBtn) heroTalkJackBtn.addEventListener('click', openFloatingAssistant);
+    if (stripTalkJackBtn) stripTalkJackBtn.addEventListener('click', openFloatingAssistant);
+    if (closeFloatingAssistantBtn) closeFloatingAssistantBtn.addEventListener('click', closeFloatingAssistant);
+
+    promptChips.forEach(chip => {
+        chip.addEventListener('click', () => {
+            const prompt = chip.getAttribute('data-prompt');
+            if (prompt) sendAssistantMessage(prompt);
+        });
+    });
+
+    function appendAssistantMessage(role, text) {
+        if (!assistantChatStream) return;
+        const bubble = document.createElement('div');
+        bubble.className = `chat-bubble ${role === 'user' ? 'user' : 'jack'}`;
+        bubble.textContent = text;
+        assistantChatStream.appendChild(bubble);
+        assistantChatStream.scrollTop = assistantChatStream.scrollHeight;
+    }
+
+    async function sendAssistantMessage(text) {
+        const query = (text || '').trim();
+        if (!query) return;
+
+        if (assistantTextInput) assistantTextInput.value = '';
+        appendAssistantMessage('user', query);
+        state.chatHistory.push({ role: 'user', text: query });
+
+        if (state.isCallActive && state.ws && state.ws.readyState === WebSocket.OPEN) {
+            state.ws.send(JSON.stringify({ type: 'text', text: query }));
+            setAiVisualState('thinking', 'Jack is processing...');
+        } else {
+            setAiVisualState('thinking', 'Jack is thinking...');
+            try {
+                const res = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message: query,
+                        history: state.chatHistory,
+                        api_key: state.apiKey
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Chat request failed');
+
+                state.chatHistory.push({ role: 'model', text: data.reply });
+                appendAssistantMessage('model', data.reply);
+                setAiVisualState('idle', 'Online & Ready');
+                speakBrowserFallback(data.reply);
+
+                if (data.actions && data.actions.length > 0) {
+                    loadDashboardStats();
+                    loadAppointments();
+                    loadDoctors();
+                    loadPatients();
+                    loadCallHistory();
+                }
+            } catch (err) {
+                console.error('Chat error:', err);
+                showToast(err.message, 'error');
+                appendAssistantMessage('jack', `Error: ${err.message}`);
+                setAiVisualState('idle', 'Online & Ready');
             }
-        } catch (e) {
-            console.error('Error loading company details:', e);
         }
     }
 
-    async function loadCallLogs() {
-        try {
-            const res = await fetch('/api/call-logs');
-            const logs = await res.json();
+    if (sendAssistantTextBtn) {
+        sendAssistantTextBtn.addEventListener('click', () => {
+            if (assistantTextInput) sendAssistantMessage(assistantTextInput.value);
+        });
+    }
 
-            if (!logsList) return;
-            if (logs.length === 0) {
-                logsList.innerHTML = '<div class="table-loading">No voice calls recorded yet.</div>';
-                return;
+    if (assistantTextInput) {
+        assistantTextInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                sendAssistantMessage(assistantTextInput.value);
             }
+        });
+    }
 
-            logsList.innerHTML = logs.map(l => `
-                <div class="log-card">
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.45rem;">
-                        <span style="font-weight: 700; color: #fff;">📞 ${escapeHtml(l.caller_identifier || 'Web Caller')}</span>
-                        <span style="font-size: 0.72rem; color: var(--cyan);">${l.duration_seconds || 0}s duration</span>
-                    </div>
-                    <p style="font-size: 0.78rem; color: var(--text-secondary); line-height: 1.4;">${escapeHtml(l.summary || 'Clinical inquiry interaction.')}</p>
-                </div>
-            `).join('');
-        } catch (e) {
-            console.error('Error loading logs:', e);
+    function setAiVisualState(mode, text) {
+        if (floatingAiStatusText) floatingAiStatusText.textContent = text;
+        if (assistantVoiceState) assistantVoiceState.textContent = text;
+
+        const waveBars = document.querySelectorAll('.wave-bar');
+        if (mode === 'speaking' || mode === 'listening') {
+            waveBars.forEach(b => b.classList.add('speaking'));
+        } else {
+            waveBars.forEach(b => b.classList.remove('speaking'));
         }
+    }
+
+    function speakBrowserFallback(text) {
+        if (!('speechSynthesis' in window)) return;
+        try { window.speechSynthesis.cancel(); } catch (e) {}
+
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'en-US';
+        utterance.onstart = () => setAiVisualState('speaking', 'Jack is speaking...');
+        utterance.onend = () => setAiVisualState('idle', 'Online & Ready');
+        utterance.onerror = () => setAiVisualState('idle', 'Online & Ready');
+        window.speechSynthesis.speak(utterance);
+    }
+
+    // Live Voice Call with WebSocket
+    async function startVoiceCall() {
+        if (state.isCallActive) return;
+
+        setAiVisualState('connecting', 'Connecting audio stream...');
+
+        // If no Gemini key or on serverless proxy, fallback to SpeechRecognition
+        if (!state.apiKey && !state.customWsUrl) {
+            startSpeechRecognitionFallback();
+            return;
+        }
+
+        try {
+            state.audioPlayer = new window.PcmAudioPlayer(24000);
+            state.audioPlayer.init();
+            state.audioPlayer.onPlaybackStateChange = (isPlaying) => {
+                if (isPlaying) setAiVisualState('speaking', 'Jack is speaking...');
+                else if (state.isCallActive) setAiVisualState('listening', 'Jack is listening...');
+            };
+
+            state.audioRecorder = new window.PcmAudioRecorder({
+                targetSampleRate: 16000,
+                onAudioChunk: (base64Pcm) => {
+                    if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+                        state.ws.send(JSON.stringify({ type: 'audio', data: base64Pcm }));
+                    }
+                },
+                onVolumeChange: (vol) => {
+                    state.currentVolume = vol;
+                }
+            });
+            await state.audioRecorder.start();
+
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const queryParams = new URLSearchParams();
+            if (state.apiKey) queryParams.set('api_key', state.apiKey);
+            if (state.voice) queryParams.set('voice', state.voice);
+
+            const wsUrl = state.customWsUrl || `${protocol}//${window.location.host}/ws/live?${queryParams.toString()}`;
+            state.ws = new WebSocket(wsUrl);
+
+            state.ws.onopen = () => {
+                state.isCallActive = true;
+                if (startVoiceCallBtn) startVoiceCallBtn.classList.add('active');
+                setAiVisualState('listening', 'Jack is listening...');
+                appendAssistantMessage('jack', 'Connected to front desk. Speak naturally or type anytime.');
+            };
+
+            state.ws.onmessage = (event) => {
+                try {
+                    const msg = JSON.parse(event.data);
+                    if (msg.type === 'status' && msg.status === 'connected') {
+                        setAiVisualState('listening', 'Jack is listening...');
+                    } else if (msg.type === 'audio' && state.audioPlayer && msg.data) {
+                        state.audioPlayer.playChunk(msg.data);
+                    } else if (msg.type === 'transcript') {
+                        appendAssistantMessage(msg.role === 'model' ? 'jack' : 'user', msg.text);
+                    } else if (msg.type === 'tool_result') {
+                        loadDashboardStats();
+                        loadAppointments();
+                        loadDoctors();
+                        loadPatients();
+                    } else if (msg.type === 'interrupted') {
+                        if (state.audioPlayer) state.audioPlayer.interrupt();
+                        setAiVisualState('listening', 'Jack is listening...');
+                    }
+                } catch (e) {
+                    console.error('WebSocket parse error:', e);
+                }
+            };
+
+            state.ws.onerror = (err) => {
+                console.warn('Live WebSocket error, falling back to voice recognizer:', err);
+                endVoiceCall();
+                startSpeechRecognitionFallback();
+            };
+
+            state.ws.onclose = () => {
+                endVoiceCall();
+            };
+        } catch (err) {
+            console.error('Start call error:', err);
+            startSpeechRecognitionFallback();
+        }
+    }
+
+    function endVoiceCall() {
+        state.isCallActive = false;
+        state.isSpeechRecognitionMode = false;
+
+        try { window.speechSynthesis.cancel(); } catch (e) {}
+
+        if (state.speechRecognition) {
+            try { state.speechRecognition.stop(); } catch (e) {}
+            state.speechRecognition = null;
+        }
+        if (state.audioRecorder) {
+            state.audioRecorder.stop();
+            state.audioRecorder = null;
+        }
+        if (state.audioPlayer) {
+            state.audioPlayer.close();
+            state.audioPlayer = null;
+        }
+        if (state.ws) {
+            try { state.ws.close(); } catch (e) {}
+            state.ws = null;
+        }
+
+        if (startVoiceCallBtn) startVoiceCallBtn.classList.remove('active');
+        setAiVisualState('idle', 'Online & Ready');
+    }
+
+    function startSpeechRecognitionFallback() {
+        const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRec) {
+            showToast('Microphone speech recognition not supported in this browser. Please use text chat.', 'error');
+            return;
+        }
+
+        state.isSpeechRecognitionMode = true;
+        state.isCallActive = true;
+        if (startVoiceCallBtn) startVoiceCallBtn.classList.add('active');
+        setAiVisualState('listening', 'Listening via microphone...');
+
+        const recognition = new SpeechRec();
+        recognition.continuous = true;
+        recognition.interimResults = false;
+        recognition.lang = 'en-US';
+
+        recognition.onresult = (event) => {
+            const last = event.results.length - 1;
+            const text = event.results[last][0].transcript.trim();
+            if (text) sendAssistantMessage(text);
+        };
+
+        recognition.onerror = (e) => {
+            if (e.error !== 'no-speech') console.warn('Speech rec error:', e.error);
+        };
+
+        recognition.onend = () => {
+            if (state.isCallActive && state.isSpeechRecognitionMode) {
+                try { recognition.start(); } catch (e) {}
+            }
+        };
+
+        try {
+            recognition.start();
+            state.speechRecognition = recognition;
+        } catch (e) {
+            console.error('Speech recognition start failed:', e);
+            endVoiceCall();
+        }
+    }
+
+    if (startVoiceCallBtn) {
+        startVoiceCallBtn.addEventListener('click', () => {
+            if (state.isCallActive) {
+                endVoiceCall();
+            } else {
+                startVoiceCall();
+            }
+        });
     }
 
     // =========================================================================
-    // Modal Actions: Booking, Adding Doctor, Details
+    // 13. Modal Actions: Bookings, Doctors, Details
     // =========================================================================
     window.openDoctorBookingModal = function(doctorId) {
-        const doc = state.allDoctors.find(d => d.id === doctorId);
-        if (!doc) return;
+        if (!state.allDoctors || state.allDoctors.length === 0) {
+            loadDoctors().then(() => finishOpenBooking(doctorId));
+        } else {
+            finishOpenBooking(doctorId);
+        }
+    };
+
+    function finishOpenBooking(doctorId) {
+        let doc = null;
+        if (doctorId) {
+            doc = state.allDoctors.find(d => d.id === doctorId);
+        }
+        if (!doc && state.allDoctors.length > 0) {
+            doc = state.allDoctors[0];
+        }
 
         state.selectedBookingDoctor = doc;
-        if (bookingDoctorInfo) {
+
+        if (bookingDoctorInfo && doc) {
             bookingDoctorInfo.innerHTML = `
-                <strong>${doc.avatar_emoji || '🩺'} ${escapeHtml(doc.name)}</strong> — ${escapeHtml(doc.specialization)} (${escapeHtml(doc.department)})<br>
-                <span style="color: var(--cyan);">Fee: ${escapeHtml(doc.consultation_fee || '₹500')}</span> • Experience: ${doc.experience_years} yrs • Rating: ⭐ ${doc.rating}/5
+                <div style="display: flex; align-items: center; gap: 0.65rem;">
+                    <span style="font-size: 1.5rem;">${doc.avatar_emoji || '🩺'}</span>
+                    <div>
+                        <strong style="color: var(--text-heading);">${escapeHtml(doc.name)}</strong> — ${escapeHtml(doc.specialization)} (${escapeHtml(doc.department)})<br>
+                        <span style="color: var(--brand-primary); font-weight: 700;">Consultation Fee: ${escapeHtml(doc.consultation_fee || '₹500')}</span> • Experience: ${doc.experience_years || 5} yrs
+                    </div>
+                </div>
             `;
         }
 
-        // Populate slots
-        if (bookApptSlot) {
+        if (bookApptSlot && doc) {
             bookApptSlot.innerHTML = '';
             const rawSlots = doc.available_slots || "09:00 AM, 10:00 AM, 11:30 AM, 02:00 PM, 03:30 PM";
             const slots = rawSlots.split(',').map(s => s.trim()).filter(Boolean);
@@ -1489,31 +1479,24 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        // Prefill authenticated user info if available
+        // Prefill authenticated user details
         if (state.currentUser) {
-            if (bookPatientName && !bookPatientName.value) {
-                bookPatientName.value = state.currentUser.name || '';
-            }
-            if (bookPatientContact && !bookPatientContact.value) {
-                bookPatientContact.value = state.currentUser.phone_number || state.currentUser.email || '';
-            }
+            if (bookPatientName && !bookPatientName.value) bookPatientName.value = state.currentUser.name || '';
+            if (bookPatientContact && !bookPatientContact.value) bookPatientContact.value = state.currentUser.phone_number || state.currentUser.email || '';
         }
 
-        bookDoctorModal.classList.add('show');
-    };
+        if (bookDoctorModal) bookDoctorModal.classList.add('show');
+    }
 
     window.scheduleVisitForPatient = function(name, contact) {
-        if (bookPatientName) bookPatientName.value = name;
-        if (bookPatientContact) bookPatientContact.value = contact;
-        if (state.allDoctors.length > 0) {
-            window.openDoctorBookingModal(state.allDoctors[0].id);
-        } else {
-            showToast('Loading doctors...', 'info');
-            loadDoctors().then(() => {
-                if (state.allDoctors.length > 0) window.openDoctorBookingModal(state.allDoctors[0].id);
-            });
-        }
+        if (bookPatientName) bookPatientName.value = name || '';
+        if (bookPatientContact) bookPatientContact.value = contact || '';
+        window.openDoctorBookingModal();
     };
+
+    if (openBookApptModalBtn) openBookApptModalBtn.addEventListener('click', () => window.openDoctorBookingModal());
+    if (quickNewApptBtn) quickNewApptBtn.addEventListener('click', () => window.openDoctorBookingModal());
+    if (stripNewApptBtn) stripNewApptBtn.addEventListener('click', () => window.openDoctorBookingModal());
 
     if (closeBookDoctorBtn) closeBookDoctorBtn.addEventListener('click', () => bookDoctorModal.classList.remove('show'));
     if (cancelBookDoctorBtn) cancelBookDoctorBtn.addEventListener('click', () => bookDoctorModal.classList.remove('show'));
@@ -1524,7 +1507,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const contact = (bookPatientContact ? bookPatientContact.value : '').trim();
             const dateVal = (bookApptDate ? bookApptDate.value : '').trim();
             const slotVal = (bookApptSlot ? bookApptSlot.value : '').trim();
-            const purposeVal = (bookApptPurpose ? bookApptPurpose.value : '').trim() || 'General Consultation';
+            const purposeVal = (bookApptPurpose ? bookApptPurpose.value : '').trim() || 'General Medical Consultation';
 
             if (!name) {
                 showToast('Please enter patient name', 'error');
@@ -1546,9 +1529,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 confirmBookDoctorBtn.textContent = 'Saving Booking...';
 
                 const reqHeaders = { 'Content-Type': 'application/json' };
-                if (state.authToken) {
-                    reqHeaders['Authorization'] = `Bearer ${state.authToken}`;
-                }
+                if (state.authToken) reqHeaders['Authorization'] = `Bearer ${state.authToken}`;
 
                 const res = await fetch('/api/appointments', {
                     method: 'POST',
@@ -1564,34 +1545,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
 
                 const data = await res.json();
-                if (!res.ok) {
-                    throw new Error(data.detail || data.message || 'Booking conflict');
-                }
+                if (!res.ok) throw new Error(data.detail || 'Booking failed');
 
-                showToast(`Appointment successfully booked! Booking #${data.booking_id || data.id}`, 'success');
-                bookDoctorModal.classList.remove('show');
+                showToast(`Appointment confirmed (#${data.appointment_id || ''})`, 'success');
+                if (bookDoctorModal) bookDoctorModal.classList.remove('show');
 
-                // Clear fields
-                if (bookPatientName) bookPatientName.value = '';
-                if (bookPatientContact) bookPatientContact.value = '';
-
-                // Reload data
                 loadDashboardStats();
                 loadAppointments();
                 loadPatients();
-
             } catch (err) {
                 showToast(err.message, 'error');
             } finally {
-                confirmBookDoctorBtn.disabled = false;
-                confirmBookDoctorBtn.textContent = '📅 Confirm Appointment';
+                if (confirmBookDoctorBtn) {
+                    confirmBookDoctorBtn.disabled = false;
+                    confirmBookDoctorBtn.textContent = 'Confirm Appointment';
+                }
             }
         });
     }
 
-    // Admin Add New Doctor Modal
-    if (adminAddDoctorBtn) adminAddDoctorBtn.addEventListener('click', () => addDoctorModal.classList.add('show'));
-    if (quickNewDocBtn) quickNewDocBtn.addEventListener('click', () => addDoctorModal.classList.add('show'));
+    // Add Doctor Submission (Admin Only)
     if (closeAddDoctorBtn) closeAddDoctorBtn.addEventListener('click', () => addDoctorModal.classList.remove('show'));
     if (cancelAddDoctorBtn) cancelAddDoctorBtn.addEventListener('click', () => addDoctorModal.classList.remove('show'));
 
@@ -1602,313 +1575,139 @@ document.addEventListener('DOMContentLoaded', () => {
             const dept = (newDocDept ? newDocDept.value : '').trim();
             const qual = (newDocQual ? newDocQual.value : '').trim();
 
-            if (!name || !spec || !dept || !qual) {
-                showToast('Please fill in required fields (Name, Specialization, Dept, Qualification)', 'error');
+            if (!name || !spec || !dept) {
+                showToast('Please fill in doctor name, specialization and department', 'error');
                 return;
             }
 
             try {
                 confirmAddDoctorBtn.disabled = true;
-                const payload = {
-                    name,
-                    specialization: spec,
-                    department: dept,
-                    qualification: qual,
-                    experience_years: parseInt(newDocExp.value) || 5,
-                    consultation_fee: newDocFee.value || '₹800',
-                    available_days: newDocDays.value || 'Mon, Wed, Fri',
-                    available_slots: newDocSlots.value || '09:00 AM, 11:00 AM, 02:00 PM',
-                    email: newDocEmail.value || 'doctor@hrenterprises.com',
-                    phone_extension: newDocExt.value || '201',
-                    bio: newDocBio.value || '',
-                    avatar_emoji: '🩺'
-                };
+                confirmAddDoctorBtn.textContent = 'Registering...';
 
                 const res = await fetch('/api/doctors', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify({
+                        name: name,
+                        specialization: spec,
+                        department: dept,
+                        qualification: qual || 'MBBS, MD',
+                        experience_years: parseInt(newDocExp.value) || 5,
+                        consultation_fee: newDocFee.value || '₹500',
+                        available_days: newDocDays.value || 'Mon, Wed, Fri',
+                        available_slots: newDocSlots.value || '09:00 AM, 11:00 AM, 02:00 PM',
+                        email: newDocEmail.value || 'doctor@hrenterprises.com',
+                        phone_extension: newDocExt.value || '101',
+                        bio: newDocBio.value || '',
+                        status: 'Available'
+                    })
                 });
+
                 const data = await res.json();
-                if (!res.ok) throw new Error(data.detail || 'Failed to register doctor');
+                if (!res.ok) throw new Error(data.detail || 'Doctor registration failed');
 
                 showToast(`Doctor ${name} registered successfully!`, 'success');
-                addDoctorModal.classList.remove('show');
-
-                newDocName.value = '';
-                newDocSpec.value = '';
-                newDocDept.value = '';
-                newDocQual.value = '';
-
-                loadDashboardStats();
+                if (addDoctorModal) addDoctorModal.classList.remove('show');
                 loadDoctors();
+                loadDashboardStats();
             } catch (err) {
                 showToast(err.message, 'error');
             } finally {
-                confirmAddDoctorBtn.disabled = false;
-            }
-        });
-    }
-
-    // Appointment Details Modal
-    window.viewAppointmentDetails = function(apptId) {
-        const appt = state.allAppointments.find(a => a.id === apptId);
-        if (!appt || !apptDetailsContent) return;
-
-        apptDetailsContent.innerHTML = `
-            <div style="display: flex; flex-direction: column; gap: 0.85rem;">
-                <div style="background: rgba(0, 240, 255, 0.06); border: 1px solid var(--border-cyan); border-radius: var(--radius-sm); padding: 0.85rem;">
-                    <div style="font-size: 0.72rem; color: var(--cyan); text-transform: uppercase; font-weight: 700;">Booking Reference</div>
-                    <div style="font-size: 1.25rem; font-weight: 800; color: #fff; font-family: var(--font-mono);">#${appt.id}</div>
-                </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; font-size: 0.82rem;">
-                    <div><span style="color: var(--text-muted);">Patient Name:</span><br><strong>👤 ${escapeHtml(appt.visitor_name)}</strong></div>
-                    <div><span style="color: var(--text-muted);">Contact Phone:</span><br><strong>📞 ${escapeHtml(appt.contact_info)}</strong></div>
-                    <div><span style="color: var(--text-muted);">Consulting Doctor:</span><br><strong>🩺 ${escapeHtml(appt.staff_name)}</strong></div>
-                    <div><span style="color: var(--text-muted);">Department:</span><br><strong>🏥 ${escapeHtml(appt.department)}</strong></div>
-                    <div><span style="color: var(--text-muted);">Appointment Date:</span><br><strong>📅 ${escapeHtml(appt.date)}</strong></div>
-                    <div><span style="color: var(--text-muted);">Time Slot:</span><br><strong>⏰ ${escapeHtml(appt.time_slot)}</strong></div>
-                </div>
-                <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 0.75rem;">
-                    <span style="color: var(--text-muted); font-size: 0.74rem;">Clinical Purpose / Symptoms:</span>
-                    <p style="font-size: 0.82rem; color: #fff; margin-top: 0.2rem;">"${escapeHtml(appt.purpose || 'General Consultation')}"</p>
-                </div>
-                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem;">
-                    <span style="color: var(--text-muted);">Status:</span>
-                    <span class="badge-status ${appt.status.toLowerCase()}">${escapeHtml(appt.status)}</span>
-                </div>
-            </div>
-        `;
-        apptDetailsModal.classList.add('show');
-    };
-
-    if (closeApptDetailsBtn) closeApptDetailsBtn.addEventListener('click', () => apptDetailsModal.classList.remove('show'));
-    if (dismissApptDetailsBtn) dismissApptDetailsBtn.addEventListener('click', () => apptDetailsModal.classList.remove('show'));
-
-    // Global Cancel & Complete Appointment Functions
-    window.cancelAppointment = async function(id) {
-        if (!confirm(`Are you sure you want to cancel appointment #${id}?`)) return;
-        try {
-            const res = await fetch(`/api/appointments/${id}`, { method: 'DELETE' });
-            if (!res.ok) throw new Error('Cancellation failed');
-            showToast(`Appointment #${id} marked as cancelled`, 'info');
-            loadDashboardStats();
-            loadAppointments();
-            loadPatients();
-        } catch (e) {
-            showToast(e.message, 'error');
-        }
-    };
-
-    window.markAppointmentCompleted = async function(id) {
-        try {
-            const res = await fetch(`/api/appointments/${id}/status`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ status: 'Completed' })
-            });
-            if (!res.ok) throw new Error('Update failed');
-            showToast(`Appointment #${id} marked as Completed`, 'success');
-            loadDashboardStats();
-            loadAppointments();
-            loadPatients();
-        } catch (e) {
-            showToast(e.message, 'error');
-        }
-    };
-
-    window.removeDoctor = async function(id) {
-        if (!confirm(`Are you sure you want to delete doctor #${id} from the clinic directory?`)) return;
-        try {
-            const res = await fetch(`/api/doctors/${id}`, { method: 'DELETE' });
-            if (!res.ok) throw new Error('Failed to delete doctor');
-            showToast(`Doctor #${id} removed successfully`, 'info');
-            loadDashboardStats();
-            loadDoctors();
-        } catch (e) {
-            showToast(e.message, 'error');
-        }
-    };
-
-    window.markMessageRead = async function(id) {
-        try {
-            await fetch(`/api/messages/${id}/read`, { method: 'PATCH' });
-            loadDashboardStats();
-            loadMessages();
-        } catch (e) { }
-    };
-
-    window.markMessageReadAndOpen = async function(id) {
-        await window.markMessageRead(id);
-        notificationsDropdown.classList.remove('show');
-        switchView('messagesView');
-    };
-
-    window.deleteMessage = async function(id) {
-        if (!confirm('Delete this message?')) return;
-        try {
-            await fetch(`/api/messages/${id}`, { method: 'DELETE' });
-            showToast('Message deleted', 'info');
-            loadDashboardStats();
-            loadMessages();
-        } catch (e) { }
-    };
-
-    // Quick New Appointment Trigger
-    if (openBookApptModalBtn) openBookApptModalBtn.addEventListener('click', () => {
-        if (state.allDoctors.length > 0) window.openDoctorBookingModal(state.allDoctors[0].id);
-        else window.openDoctorBookingModal(1);
-    });
-    if (quickNewApptBtn) quickNewApptBtn.addEventListener('click', () => {
-        if (state.allDoctors.length > 0) window.openDoctorBookingModal(state.allDoctors[0].id);
-        else window.openDoctorBookingModal(1);
-    });
-    if (patientNewApptBtn) patientNewApptBtn.addEventListener('click', () => {
-        if (state.allDoctors.length > 0) window.openDoctorBookingModal(state.allDoctors[0].id);
-        else window.openDoctorBookingModal(1);
-    });
-
-    // Refresh Buttons
-    if (refreshDashboardBtn) refreshDashboardBtn.addEventListener('click', () => {
-        loadDashboardStats();
-        showToast('Dashboard metrics refreshed', 'info');
-    });
-    if (refreshApptsBtn) refreshApptsBtn.addEventListener('click', () => {
-        loadAppointments();
-        showToast('Appointments synced', 'info');
-    });
-    if (refreshDoctorsBtn) refreshDoctorsBtn.addEventListener('click', () => {
-        loadDoctors();
-        showToast('Doctors directory synced', 'info');
-    });
-    if (refreshPatientsBtn) refreshPatientsBtn.addEventListener('click', () => {
-        loadPatients();
-        showToast('Patients synced', 'info');
-    });
-    if (refreshMsgsBtn) refreshMsgsBtn.addEventListener('click', () => {
-        loadMessages();
-        showToast('Messages synced', 'info');
-    });
-    if (refreshDirectoryBtn) refreshDirectoryBtn.addEventListener('click', () => {
-        loadDirectory();
-        showToast('Directory synced', 'info');
-    });
-    if (refreshLogsBtn) refreshLogsBtn.addEventListener('click', () => {
-        loadCallLogs();
-        showToast('Call logs refreshed', 'info');
-    });
-
-    // Notifications Dropdown Toggle
-    if (notificationsBtn && notificationsDropdown) {
-        notificationsBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            notificationsDropdown.classList.toggle('show');
-        });
-        document.addEventListener('click', (e) => {
-            if (!notificationsDropdown.contains(e.target) && e.target !== notificationsBtn) {
-                notificationsDropdown.classList.remove('show');
-            }
-        });
-    }
-
-    // Global Search Bar Handler
-    if (globalSearchInput) {
-        globalSearchInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                const q = globalSearchInput.value.trim();
-                if (!q) return;
-
-                // Route search based on context or switch to appointments view with search
-                switchView('appointmentsView');
-                if (apptSearchInput) {
-                    apptSearchInput.value = q;
-                    renderAppointments();
+                if (confirmAddDoctorBtn) {
+                    confirmAddDoctorBtn.disabled = false;
+                    confirmAddDoctorBtn.textContent = '💾 Register Doctor';
                 }
             }
         });
     }
 
-    // Settings Modal Handlers
-    function openSettings() {
-        if (apiKeyInput) apiKeyInput.value = state.apiKey;
-        if (voiceSelect) voiceSelect.value = state.voice;
-        if (customWsUrlInput) customWsUrlInput.value = state.customWsUrl;
-        settingsModal.classList.add('show');
-    }
-    if (openSettingsBtn) openSettingsBtn.addEventListener('click', openSettings);
-    if (headerSettingsBtn) headerSettingsBtn.addEventListener('click', openSettings);
-    if (closeSettingsBtn) closeSettingsBtn.addEventListener('click', () => settingsModal.classList.remove('show'));
-    if (cancelSettingsBtn) cancelSettingsBtn.addEventListener('click', () => settingsModal.classList.remove('show'));
+    // Appointment Details & Actions
+    window.viewAppointmentDetails = function(apptId) {
+        const appt = state.allAppointments.find(a => a.id === apptId);
+        if (!appt) return;
 
-    if (saveSettingsBtn) {
-        saveSettingsBtn.addEventListener('click', async () => {
-            const key = apiKeyInput.value.trim();
-            const voice = voiceSelect.value;
-            const customWs = customWsUrlInput.value.trim();
+        if (apptDetailsContent) {
+            apptDetailsContent.innerHTML = `
+                <div style="background: var(--bg-muted); border-radius: var(--radius-md); padding: 1rem; margin-bottom: 1rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <span style="font-size: 0.76rem; font-weight: 700; color: var(--brand-primary); font-family: var(--font-mono);">APPOINTMENT #${appt.id}</span>
+                        <span class="status-pill ${appt.status.toLowerCase()}">${escapeHtml(appt.status)}</span>
+                    </div>
+                    <h3 style="font-size: 1.15rem; font-weight: 800; color: var(--text-heading); margin-bottom: 0.25rem;">${escapeHtml(appt.visitor_name)}</h3>
+                    <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">Contact: ${escapeHtml(appt.contact_info)}</p>
+                </div>
 
-            state.apiKey = key;
-            state.voice = voice;
-            state.customWsUrl = customWs;
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; font-size: 0.82rem; margin-bottom: 1rem;">
+                    <div><strong>Specialist:</strong><br>${escapeHtml(appt.staff_name)}</div>
+                    <div><strong>Department:</strong><br>${escapeHtml(appt.department)}</div>
+                    <div><strong>Consultation Date:</strong><br>${escapeHtml(appt.date)}</div>
+                    <div><strong>Time Slot:</strong><br>${escapeHtml(appt.time_slot)}</div>
+                </div>
 
-            localStorage.setItem('gemini_api_key', key);
-            localStorage.setItem('receptionist_voice', voice);
-            localStorage.setItem('custom_ws_url', customWs);
+                <div style="background: #F8FAFC; border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 0.75rem; font-size: 0.8rem;">
+                    <strong>Reason for Consultation:</strong><br>
+                    "${escapeHtml(appt.purpose || 'General Consultation')}"
+                </div>
+            `;
+        }
 
-            if (key) {
-                try {
-                    await fetch('/api/config/key', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ api_key: key })
-                    });
-                } catch (e) { }
-            }
+        if (apptDetailsModal) apptDetailsModal.classList.add('show');
+    };
 
-            settingsModal.classList.remove('show');
-            showToast('Settings saved successfully', 'success');
-        });
-    }
+    if (closeApptDetailsBtn) closeApptDetailsBtn.addEventListener('click', () => apptDetailsModal.classList.remove('show'));
+    if (dismissApptDetailsBtn) dismissApptDetailsBtn.addEventListener('click', () => apptDetailsModal.classList.remove('show'));
+
+    window.markAppointmentCompleted = async function(apptId) {
+        try {
+            const res = await fetch(`/api/appointments/${apptId}/status`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: 'Completed' })
+            });
+            if (!res.ok) throw new Error('Status update failed');
+            showToast(`Appointment #${apptId} marked as Completed`, 'success');
+            loadAppointments();
+            loadDashboardStats();
+        } catch (e) {
+            showToast(e.message, 'error');
+        }
+    };
+
+    window.cancelAppointment = async function(apptId) {
+        if (!confirm(`Are you sure you want to cancel appointment #${apptId}?`)) return;
+        try {
+            const res = await fetch(`/api/appointments/${apptId}`, { method: 'DELETE' });
+            if (!res.ok) throw new Error('Cancellation failed');
+            showToast(`Appointment #${apptId} has been cancelled`, 'info');
+            loadAppointments();
+            loadDashboardStats();
+        } catch (e) {
+            showToast(e.message, 'error');
+        }
+    };
+
+    window.markMessageReadAndOpen = async function(msgId) {
+        try {
+            await fetch(`/api/messages/${msgId}/read`, { method: 'PATCH' });
+            loadDashboardStats();
+            loadCallHistory();
+        } catch (e) {}
+    };
 
     // =========================================================================
-    // Utility Helpers
-    // =========================================================================
-    function escapeHtml(text) {
-        if (!text) return '';
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
-    function showToast(message, type = 'info') {
-        if (!toastContainer) return;
-        const toast = document.createElement('div');
-        toast.className = `toast ${type}`;
-        const icon = type === 'error' ? '⚠️' : (type === 'success' ? '✅' : 'ℹ️');
-        toast.innerHTML = `<span>${icon}</span> <span>${escapeHtml(message)}</span>`;
-        toastContainer.appendChild(toast);
-        setTimeout(() => {
-            toast.style.opacity = '0';
-            toast.style.transform = 'translateY(-10px)';
-            toast.style.transition = 'all 0.3s ease';
-            setTimeout(() => toast.remove(), 300);
-        }, 3500);
-    }
-
-    // =========================================================================
-    // 7. Authentication & OTP Verification Controller
+    // 14. Authentication Controller (Login / Register / OTP)
     // =========================================================================
     function showAuthAlert(msg, type = 'error') {
         if (!authAlert) return;
-        authAlert.className = `auth-alert ${type}`;
-        authAlert.innerHTML = `<span>${type === 'error' ? '⚠️' : (type === 'success' ? '✅' : 'ℹ️')}</span> <span>${escapeHtml(msg)}</span>`;
-        authAlert.style.display = 'flex';
+        authAlert.style.display = 'block';
+        authAlert.style.background = (type === 'error') ? '#FEF2F2' : '#ECFDF5';
+        authAlert.style.color = (type === 'error') ? '#DC2626' : '#059669';
+        authAlert.style.border = `1px solid ${type === 'error' ? '#FECACA' : '#A7F3D0'}`;
+        authAlert.textContent = msg;
     }
 
     function hideAuthAlert() {
-        if (authAlert) {
-            authAlert.style.display = 'none';
-            authAlert.innerHTML = '';
-        }
+        if (authAlert) authAlert.style.display = 'none';
     }
 
     function switchAuthTab(channel) {
@@ -1946,7 +1745,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             if (topbarUserName) topbarUserName.textContent = displayName;
-            if (topbarUserStatus) topbarUserStatus.textContent = 'Active';
+            if (topbarUserStatus) topbarUserStatus.textContent = 'Online';
             if (topbarUserAvatar) topbarUserAvatar.textContent = '👨‍⚕️';
         } else {
             if (sidebarUserName) sidebarUserName.textContent = 'Guest Portal';
@@ -1966,34 +1765,21 @@ document.addEventListener('DOMContentLoaded', () => {
     function openAuthModal() {
         hideAuthAlert();
         if (state.currentUser) {
-            // Show Profile Panel
             if (authStepRequest) authStepRequest.style.display = 'none';
             if (authStepVerify) authStepVerify.style.display = 'none';
             if (authStepProfile) authStepProfile.style.display = 'block';
 
-            const displayName = state.currentUser.name || 'Healthcare User';
-            const displayId = state.currentUser.email || state.currentUser.phone_number || '';
-            if (profileLargeName) profileLargeName.textContent = displayName;
-            if (profileLargeIdentifier) profileLargeIdentifier.textContent = displayId;
-            if (profileMetaAuthType) profileMetaAuthType.textContent = state.currentUser.email ? 'Email OTP Verified' : 'Phone OTP Verified';
+            if (profileLargeName) profileLargeName.textContent = state.currentUser.name || 'Healthcare User';
+            if (profileLargeIdentifier) profileLargeIdentifier.textContent = state.currentUser.email || state.currentUser.phone_number || '';
+            if (profileMetaAuthType) profileMetaAuthType.textContent = state.currentUser.email ? 'Email OTP' : 'Phone OTP';
             if (profileMetaCreatedAt) {
                 const dt = state.currentUser.created_at ? new Date(state.currentUser.created_at) : new Date();
-                profileMetaCreatedAt.textContent = dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-            }
-            if (profileMetaLastLogin) {
-                const dt = state.currentUser.last_login ? new Date(state.currentUser.last_login) : new Date();
-                profileMetaLastLogin.textContent = dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+                profileMetaCreatedAt.textContent = dt.toLocaleDateString();
             }
         } else {
-            // Show Request OTP Panel
             if (authStepRequest) authStepRequest.style.display = 'block';
             if (authStepVerify) authStepVerify.style.display = 'none';
             if (authStepProfile) authStepProfile.style.display = 'none';
-
-            // Clear inputs
-            if (authNameInput) authNameInput.value = '';
-            if (authEmailInput) authEmailInput.value = '';
-            if (authPhoneInput) authPhoneInput.value = '';
         }
         if (authModal) authModal.classList.add('show');
     }
@@ -2010,13 +1796,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (sidebarAuthActionBtn) sidebarAuthActionBtn.addEventListener('click', openAuthModal);
     if (closeAuthModalBtn) closeAuthModalBtn.addEventListener('click', closeAuthModal);
 
-    // Stop timer on modal click outside
-    if (authModal) {
-        authModal.addEventListener('click', (e) => {
-            if (e.target === authModal) closeAuthModal();
-        });
-    }
-
     function startOtpCountdown(totalSeconds = 30) {
         if (state.otpTimerInterval) {
             clearInterval(state.otpTimerInterval);
@@ -2026,14 +1805,8 @@ document.addEventListener('DOMContentLoaded', () => {
         state.otpSecondsLeft = totalSeconds;
         if (authResendBtn) authResendBtn.disabled = true;
 
-        if (otpCountdownText) {
-            otpCountdownText.textContent = `${state.otpSecondsLeft}s`;
-            otpCountdownText.classList.remove('urgent');
-        }
-        if (otpTimerBar) {
-            otpTimerBar.style.width = '100%';
-            otpTimerBar.classList.remove('urgent');
-        }
+        if (otpCountdownText) otpCountdownText.textContent = `${state.otpSecondsLeft}s`;
+        if (otpTimerBar) otpTimerBar.style.width = '100%';
 
         state.otpTimerInterval = setInterval(() => {
             state.otpSecondsLeft--;
@@ -2042,31 +1815,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 clearInterval(state.otpTimerInterval);
                 state.otpTimerInterval = null;
 
-                if (otpCountdownText) {
-                    otpCountdownText.textContent = 'Expired';
-                    otpCountdownText.classList.add('urgent');
-                }
-                if (otpTimerBar) {
-                    otpTimerBar.style.width = '0%';
-                    otpTimerBar.classList.add('urgent');
-                }
-                if (authResendBtn) {
-                    authResendBtn.disabled = false;
-                }
-                showAuthAlert('The verification code has expired after 30 seconds. Please click "Resend Code" to receive a fresh code.', 'error');
+                if (otpCountdownText) otpCountdownText.textContent = 'Expired';
+                if (otpTimerBar) otpTimerBar.style.width = '0%';
+                if (authResendBtn) authResendBtn.disabled = false;
+                showAuthAlert('Verification code has expired. Please click Resend Code.', 'error');
             } else {
-                if (otpCountdownText) {
-                    otpCountdownText.textContent = `${state.otpSecondsLeft}s`;
-                }
+                if (otpCountdownText) otpCountdownText.textContent = `${state.otpSecondsLeft}s`;
                 const pct = Math.max(0, (state.otpSecondsLeft / totalSeconds) * 100);
-                if (otpTimerBar) {
-                    otpTimerBar.style.width = `${pct}%`;
-                }
-
-                if (state.otpSecondsLeft <= 10) {
-                    if (otpCountdownText) otpCountdownText.classList.add('urgent');
-                    if (otpTimerBar) otpTimerBar.classList.add('urgent');
-                }
+                if (otpTimerBar) otpTimerBar.style.width = `${pct}%`;
             }
         }, 1000);
     }
@@ -2077,16 +1833,16 @@ document.addEventListener('DOMContentLoaded', () => {
         let identifier = '';
         if (state.authChannel === 'email') {
             identifier = (authEmailInput ? authEmailInput.value : '').trim();
-            if (!identifier || !identifier.includes('@') || !identifier.includes('.')) {
-                showAuthAlert('Please enter a valid email address (e.g. user@example.com)', 'error');
+            if (!identifier || !identifier.includes('@')) {
+                showAuthAlert('Please enter a valid email address', 'error');
                 if (authEmailInput) authEmailInput.focus();
                 return;
             }
         } else {
             identifier = (authPhoneInput ? authPhoneInput.value : '').trim();
-            const cleanDigits = identifier.replace(/[\s\-\(\)\+]/g, '');
-            if (!identifier || cleanDigits.length < 7) {
-                showAuthAlert('Please enter a valid phone number (e.g. +91 9876543210)', 'error');
+            const digits = identifier.replace(/[^0-9]/g, '');
+            if (digits.length < 7) {
+                showAuthAlert('Please enter a valid phone number', 'error');
                 if (authPhoneInput) authPhoneInput.focus();
                 return;
             }
@@ -2095,80 +1851,38 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             if (sendOtpBtn) {
                 sendOtpBtn.disabled = true;
-                sendOtpBtn.innerHTML = '<span class="btn-text">Sending OTP...</span>';
+                sendOtpBtn.textContent = 'Sending OTP...';
             }
-            if (authResendBtn) {
-                authResendBtn.disabled = true;
-            }
+            if (authResendBtn) authResendBtn.disabled = true;
 
-            let res, data;
-            try {
-                res = await fetch('/api/auth/send-otp', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        identifier: identifier,
-                        channel: state.authChannel
-                    })
-                });
-            } catch (networkErr) {
-                throw new Error('Cannot reach the server. Please check your connection.');
-            }
+            const res = await fetch('/api/auth/send-otp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    identifier: identifier,
+                    channel: state.authChannel
+                })
+            });
 
-            // Parse JSON response
-            try {
-                data = await res.json();
-            } catch (parseErr) {
-                throw new Error(`Server error (HTTP ${res.status}). Please try again.`);
-            }
-
-            // Handle specific HTTP errors with meaningful messages
-            if (!res.ok) {
-                if (res.status === 404) {
-                    throw new Error('Authentication service not found. Please refresh the page and try again.');
-                } else if (res.status === 422) {
-                    const detail = data.detail;
-                    if (Array.isArray(detail)) {
-                        throw new Error(detail.map(d => d.msg || d.message).join('. '));
-                    }
-                    throw new Error(typeof detail === 'string' ? detail : 'Invalid input. Please check your email or phone number.');
-                } else if (res.status === 429) {
-                    throw new Error('Too many OTP requests. Please wait a moment before trying again.');
-                } else if (res.status === 500) {
-                    throw new Error('A server error occurred. Please try again in a moment.');
-                } else {
-                    throw new Error(data.detail || data.message || `Request failed (HTTP ${res.status}).`);
-                }
-            }
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Failed to send OTP');
 
             state.authIdentifier = identifier;
-
-            // Update Step 2 UI
             if (authTargetDisplay) authTargetDisplay.textContent = identifier;
             if (authStepRequest) authStepRequest.style.display = 'none';
             if (authStepVerify) authStepVerify.style.display = 'block';
 
-            // Clear OTP inputs
-            otpDigitBoxes.forEach(box => {
-                box.value = '';
-                box.classList.remove('filled');
-            });
+            otpDigitBoxes.forEach(b => { b.value = ''; b.classList.remove('filled'); });
+            if (otpDigitBoxes[0]) setTimeout(() => otpDigitBoxes[0].focus(), 100);
 
-            // Focus first digit box
-            if (otpDigitBoxes[0]) {
-                setTimeout(() => otpDigitBoxes[0].focus(), 100);
-            }
-
-            // Start 30-Second Countdown
             startOtpCountdown(data.expires_in || 30);
-
             showToast(`Verification code sent via ${state.authChannel}`, 'success');
         } catch (err) {
             showAuthAlert(err.message, 'error');
         } finally {
             if (sendOtpBtn) {
                 sendOtpBtn.disabled = false;
-                sendOtpBtn.innerHTML = '<span class="btn-text">Continue & Send OTP</span> <span class="btn-arrow">→</span>';
+                sendOtpBtn.textContent = 'Continue & Send OTP →';
             }
         }
     }
@@ -2178,152 +1892,97 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (authBackToRequestBtn) {
         authBackToRequestBtn.addEventListener('click', () => {
-            if (state.otpTimerInterval) {
-                clearInterval(state.otpTimerInterval);
-                state.otpTimerInterval = null;
-            }
+            if (state.otpTimerInterval) clearInterval(state.otpTimerInterval);
             hideAuthAlert();
             if (authStepVerify) authStepVerify.style.display = 'none';
             if (authStepRequest) authStepRequest.style.display = 'block';
         });
     }
 
-    // 6-digit OTP Inputs behavior
+    // 6-digit inputs auto-advance and backspace
     otpDigitBoxes.forEach((box, idx) => {
-        // Input event (digit typed)
-        box.addEventListener('input', (e) => {
+        box.addEventListener('input', () => {
             const val = box.value.replace(/[^0-9]/g, '');
             box.value = val ? val[0] : '';
 
             if (box.value) {
                 box.classList.add('filled');
-                // Move to next input box
                 if (idx < otpDigitBoxes.length - 1) {
                     otpDigitBoxes[idx + 1].focus();
                 } else {
-                    // Check if all 6 filled -> Auto verify
-                    const fullOtp = Array.from(otpDigitBoxes).map(b => b.value).join('');
-                    if (fullOtp.length === 6) {
-                        handleVerifyOtp();
-                    }
+                    const full = Array.from(otpDigitBoxes).map(b => b.value).join('');
+                    if (full.length === 6) handleVerifyOtp();
                 }
             } else {
                 box.classList.remove('filled');
             }
         });
 
-        // Keydown (Backspace navigation)
         box.addEventListener('keydown', (e) => {
             if (e.key === 'Backspace' && !box.value && idx > 0) {
                 otpDigitBoxes[idx - 1].focus();
             }
         });
 
-        // Paste support (pasting full 6 digits)
         box.addEventListener('paste', (e) => {
             e.preventDefault();
-            const pasteData = (e.clipboardData || window.clipboardData).getData('text').trim();
-            const digits = pasteData.replace(/[^0-9]/g, '');
-
-            if (digits.length >= 6) {
+            const text = (e.clipboardData || window.clipboardData).getData('text').trim().replace(/[^0-9]/g, '');
+            if (text.length >= 6) {
                 for (let i = 0; i < 6; i++) {
-                    otpDigitBoxes[i].value = digits[i];
+                    otpDigitBoxes[i].value = text[i];
                     otpDigitBoxes[i].classList.add('filled');
                 }
                 otpDigitBoxes[5].focus();
                 handleVerifyOtp();
-            } else {
-                showAuthAlert('Pasted code must be at least 6 digits', 'error');
             }
         });
     });
 
     async function handleVerifyOtp() {
         hideAuthAlert();
+        const otpCode = Array.from(otpDigitBoxes).map(b => b.value.trim()).join('');
 
-        const fullOtp = Array.from(otpDigitBoxes).map(b => b.value.trim()).join('');
-        if (fullOtp.length !== 6 || !/^\d{6}$/.test(fullOtp)) {
-            showAuthAlert('Please enter all 6 numeric digits of the verification code.', 'error');
+        if (otpCode.length !== 6) {
+            showAuthAlert('Please enter all 6 numeric digits', 'error');
             return;
         }
 
         try {
             if (verifyOtpBtn) {
                 verifyOtpBtn.disabled = true;
-                verifyOtpBtn.innerHTML = '<span class="btn-text">Verifying...</span>';
+                verifyOtpBtn.textContent = 'Verifying...';
             }
 
-            const userName = (authNameInput ? authNameInput.value.trim() : '') || null;
+            const res = await fetch('/api/auth/verify-otp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    identifier: state.authIdentifier,
+                    otp: otpCode,
+                    name: (authNameInput ? authNameInput.value.trim() : '') || null
+                })
+            });
 
-            let res, data;
-            try {
-                res = await fetch('/api/auth/verify-otp', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        identifier: state.authIdentifier,
-                        otp: fullOtp,
-                        name: userName
-                    })
-                });
-            } catch (networkErr) {
-                throw new Error('Cannot reach the server. Please check your connection.');
-            }
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Verification failed');
 
-            try {
-                data = await res.json();
-            } catch (parseErr) {
-                throw new Error(`Server error (HTTP ${res.status}). Please try again.`);
-            }
+            if (state.otpTimerInterval) clearInterval(state.otpTimerInterval);
 
-            if (!res.ok) {
-                if (res.status === 404) {
-                    throw new Error('Verification service not found. Please refresh the page.');
-                } else if (res.status === 422) {
-                    const detail = data.detail;
-                    if (Array.isArray(detail)) {
-                        throw new Error(detail.map(d => d.msg || d.message).join('. '));
-                    }
-                    throw new Error(typeof detail === 'string' ? detail : 'Invalid verification code format.');
-                } else if (res.status === 500) {
-                    throw new Error('A server error occurred during verification. Please try again.');
-                } else {
-                    throw new Error(data.detail || data.message || 'Verification failed. Please check your code.');
-                }
-            }
-
-            // Stop timer
-            if (state.otpTimerInterval) {
-                clearInterval(state.otpTimerInterval);
-                state.otpTimerInterval = null;
-            }
-
-            // Save token and user state
             state.authToken = data.token;
             localStorage.setItem('jack_auth_token', data.token);
             state.currentUser = data.user;
 
             updateUserUI();
             showToast(`Welcome ${state.currentUser.name || 'User'}! Authentication successful.`, 'success');
-
-            // Close modal after brief success feedback
-            setTimeout(() => {
-                closeAuthModal();
-            }, 600);
+            setTimeout(closeAuthModal, 500);
         } catch (err) {
             showAuthAlert(err.message, 'error');
-            // Only clear inputs on wrong code, not on network errors
-            if (!err.message.includes('server') && !err.message.includes('reach')) {
-                otpDigitBoxes.forEach(b => {
-                    b.value = '';
-                    b.classList.remove('filled');
-                });
-                if (otpDigitBoxes[0]) otpDigitBoxes[0].focus();
-            }
+            otpDigitBoxes.forEach(b => { b.value = ''; b.classList.remove('filled'); });
+            if (otpDigitBoxes[0]) otpDigitBoxes[0].focus();
         } finally {
             if (verifyOtpBtn) {
                 verifyOtpBtn.disabled = false;
-                verifyOtpBtn.innerHTML = '<span class="btn-text">Verify & Sign In</span> <span class="btn-arrow">✓</span>';
+                verifyOtpBtn.textContent = 'Verify & Sign In ✓';
             }
         }
     }
@@ -2331,34 +1990,22 @@ document.addEventListener('DOMContentLoaded', () => {
     if (verifyOtpBtn) verifyOtpBtn.addEventListener('click', handleVerifyOtp);
 
     async function handleLogout() {
-        try {
-            await fetch('/api/auth/logout', { method: 'POST' });
-        } catch (e) { }
+        try { await fetch('/api/auth/logout', { method: 'POST' }); } catch (e) {}
 
-        if (state.otpTimerInterval) {
-            clearInterval(state.otpTimerInterval);
-            state.otpTimerInterval = null;
-        }
-
+        if (state.otpTimerInterval) clearInterval(state.otpTimerInterval);
         localStorage.removeItem('jack_auth_token');
         state.authToken = '';
         state.currentUser = null;
 
         updateUserUI();
-        showToast('Signed out successfully.', 'info');
-
-        // Reset to Step 1
+        showToast('Signed out successfully', 'info');
         if (authStepProfile) authStepProfile.style.display = 'none';
-        if (authStepVerify) authStepVerify.style.display = 'none';
         if (authStepRequest) authStepRequest.style.display = 'block';
     }
 
     if (authSignOutBtn) authSignOutBtn.addEventListener('click', handleLogout);
-    if (authSwitchAccountBtn) {
-        authSwitchAccountBtn.addEventListener('click', () => {
-            handleLogout();
-        });
-    }
+    if (sidebarLogoutNavBtn) sidebarLogoutNavBtn.addEventListener('click', handleLogout);
+    if (authSwitchAccountBtn) authSwitchAccountBtn.addEventListener('click', handleLogout);
 
     async function checkAuthState() {
         if (!state.authToken) {
@@ -2368,37 +2015,56 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             const res = await fetch('/api/auth/me', {
-                headers: {
-                    'Authorization': `Bearer ${state.authToken}`
-                }
+                headers: { 'Authorization': `Bearer ${state.authToken}` }
             });
-
             if (res.ok) {
                 const data = await res.json();
                 state.currentUser = data.user;
                 updateUserUI();
             } else {
-                // Token expired or invalid
                 localStorage.removeItem('jack_auth_token');
                 state.authToken = '';
                 state.currentUser = null;
                 updateUserUI();
             }
-        } catch (err) {
-            console.warn('Auth check skipped (offline or server starting):', err);
+        } catch (e) {
             updateUserUI();
         }
     }
 
     // =========================================================================
-    // Initial Application Boot
+    // 15. Helper Utilities
+    // =========================================================================
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    function showToast(message, type = 'info') {
+        if (!toastContainer) return;
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        const icon = type === 'error' ? '⚠️' : (type === 'success' ? '✅' : 'ℹ️');
+        toast.innerHTML = `<span>${icon}</span> <span>${escapeHtml(message)}</span>`;
+        toastContainer.appendChild(toast);
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateY(-10px)';
+            toast.style.transition = 'all 0.3s ease';
+            setTimeout(() => toast.remove(), 300);
+        }, 3500);
+    }
+
+    // =========================================================================
+    // 16. Initial Application Boot
     // =========================================================================
     checkAuthState();
     loadDashboardStats();
     loadAppointments();
     loadDoctors();
     loadPatients();
-    loadMessages();
-    loadDirectory();
-    loadCompanyDetails();
+    loadCallHistory();
+    loadAnalytics();
 });

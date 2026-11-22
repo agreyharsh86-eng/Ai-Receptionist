@@ -2,9 +2,10 @@
 
 import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from fastapi.responses import FileResponse
 from pathlib import Path
 
@@ -53,16 +54,33 @@ app.include_router(api_router)
 app.include_router(auth_router)
 app.include_router(ws_router)
 
-# Mount Static UI
+# Mount Static UI & Jinja2 Templates
 STATIC_DIR = config.BASE_DIR / "static"
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
+
+TEMPLATES_DIR = config.BASE_DIR / "templates"
+TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
+templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 # Mount static files
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 @app.get("/")
-async def serve_index():
+async def serve_index(request: Request):
+    index_template = TEMPLATES_DIR / "index.html"
+    if index_template.exists():
+        return templates.TemplateResponse(
+            request=request,
+            name="index.html",
+            context={
+                "company_name": config.COMPANY_NAME,
+                "company_industry": config.COMPANY_INDUSTRY,
+                "receptionist_name": config.RECEPTIONIST_NAME,
+                "live_model": config.GEMINI_LIVE_MODEL,
+                "default_voice": config.DEFAULT_VOICE
+            }
+        )
     index_path = STATIC_DIR / "index.html"
     if index_path.exists():
         return FileResponse(str(index_path))
-    return {"message": f"AI Receptionist Backend Active. Static frontend not yet compiled."}
+    return {"message": "AI Receptionist Backend Active."}

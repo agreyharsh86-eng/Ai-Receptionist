@@ -500,8 +500,29 @@ class TestReceptionistBackend(unittest.TestCase):
                 await db.close()
         asyncio.run(clean())
 
-if __name__ == "__main__":
-    unittest.main()
+    def test_18_analytics_endpoint(self):
+        """Test the aggregated analytics endpoint for the enterprise dashboard."""
+        res = self.client.get("/api/analytics")
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertIn("department_breakdown", data)
+        self.assertIn("status_breakdown", data)
+        self.assertIn("daily_trend", data)
+        self.assertIn("doctor_load", data)
+        self.assertIn("call_metrics", data)
+        self.assertIsInstance(data["daily_trend"], list)
+        self.assertIsInstance(data["doctor_load"], list)
+        self.assertIn("total_calls", data["call_metrics"])
+
+    def test_19_root_template_rendering(self):
+        """Test Jinja2 template rendering of the enterprise dashboard."""
+        res = self.client.get("/")
+        self.assertEqual(res.status_code, 200)
+        self.assertIn("JACK AI Receptionist", res.text)
+        self.assertIn("Core Management", res.text)
+        self.assertIn("id=\"appSidebar\"", res.text)
+        self.assertIn("id=\"floatingAssistantWindow\"", res.text)
+        self.assertIn("id=\"quickTriggerJackBtn\"", res.text)
 
 if __name__ == "__main__":
     unittest.main()
