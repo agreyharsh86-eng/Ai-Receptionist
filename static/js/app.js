@@ -1108,7 +1108,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ api_key: key })
-            }).catch(() => {});
+            }).catch(() => { });
         }
 
         showToast('Settings saved successfully', 'success');
@@ -1258,7 +1258,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function speakBrowserFallback(text) {
         if (!('speechSynthesis' in window)) return;
-        try { window.speechSynthesis.cancel(); } catch (e) {}
+        try { window.speechSynthesis.cancel(); } catch (e) { }
 
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = 'en-US';
@@ -1358,10 +1358,10 @@ document.addEventListener('DOMContentLoaded', () => {
         state.isCallActive = false;
         state.isSpeechRecognitionMode = false;
 
-        try { window.speechSynthesis.cancel(); } catch (e) {}
+        try { window.speechSynthesis.cancel(); } catch (e) { }
 
         if (state.speechRecognition) {
-            try { state.speechRecognition.stop(); } catch (e) {}
+            try { state.speechRecognition.stop(); } catch (e) { }
             state.speechRecognition = null;
         }
         if (state.audioRecorder) {
@@ -1373,7 +1373,7 @@ document.addEventListener('DOMContentLoaded', () => {
             state.audioPlayer = null;
         }
         if (state.ws) {
-            try { state.ws.close(); } catch (e) {}
+            try { state.ws.close(); } catch (e) { }
             state.ws = null;
         }
 
@@ -1410,7 +1410,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         recognition.onend = () => {
             if (state.isCallActive && state.isSpeechRecognitionMode) {
-                try { recognition.start(); } catch (e) {}
+                try { recognition.start(); } catch (e) { }
             }
         };
 
@@ -1436,7 +1436,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // =========================================================================
     // 13. Modal Actions: Bookings, Doctors, Details
     // =========================================================================
-    window.openDoctorBookingModal = function(doctorId) {
+    window.openDoctorBookingModal = function (doctorId) {
         if (!state.allDoctors || state.allDoctors.length === 0) {
             loadDoctors().then(() => finishOpenBooking(doctorId));
         } else {
@@ -1488,7 +1488,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (bookDoctorModal) bookDoctorModal.classList.add('show');
     }
 
-    window.scheduleVisitForPatient = function(name, contact) {
+    window.scheduleVisitForPatient = function (name, contact) {
         if (bookPatientName) bookPatientName.value = name || '';
         if (bookPatientContact) bookPatientContact.value = contact || '';
         window.openDoctorBookingModal();
@@ -1622,7 +1622,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Appointment Details & Actions
-    window.viewAppointmentDetails = function(apptId) {
+    window.viewAppointmentDetails = function (apptId) {
         const appt = state.allAppointments.find(a => a.id === apptId);
         if (!appt) return;
 
@@ -1657,7 +1657,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (closeApptDetailsBtn) closeApptDetailsBtn.addEventListener('click', () => apptDetailsModal.classList.remove('show'));
     if (dismissApptDetailsBtn) dismissApptDetailsBtn.addEventListener('click', () => apptDetailsModal.classList.remove('show'));
 
-    window.markAppointmentCompleted = async function(apptId) {
+    window.markAppointmentCompleted = async function (apptId) {
         try {
             const res = await fetch(`/api/appointments/${apptId}/status`, {
                 method: 'PATCH',
@@ -1673,7 +1673,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    window.cancelAppointment = async function(apptId) {
+    window.cancelAppointment = async function (apptId) {
         if (!confirm(`Are you sure you want to cancel appointment #${apptId}?`)) return;
         try {
             const res = await fetch(`/api/appointments/${apptId}`, { method: 'DELETE' });
@@ -1686,12 +1686,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    window.markMessageReadAndOpen = async function(msgId) {
+    window.markMessageReadAndOpen = async function (msgId) {
         try {
             await fetch(`/api/messages/${msgId}/read`, { method: 'PATCH' });
             loadDashboardStats();
             loadCallHistory();
-        } catch (e) {}
+        } catch (e) { }
     };
 
     // =========================================================================
@@ -1785,6 +1785,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function closeAuthModal() {
+        // Prevent closing if user is not authenticated (dashboard is locked)
+        if (!state.currentUser) return;
         if (state.otpTimerInterval) {
             clearInterval(state.otpTimerInterval);
             state.otpTimerInterval = null;
@@ -1973,8 +1975,9 @@ document.addEventListener('DOMContentLoaded', () => {
             state.currentUser = data.user;
 
             updateUserUI();
+            setDashboardLocked(false);
             showToast(`Welcome ${state.currentUser.name || 'User'}! Authentication successful.`, 'success');
-            setTimeout(closeAuthModal, 500);
+            if (authModal) authModal.classList.remove('show');
         } catch (err) {
             showAuthAlert(err.message, 'error');
             otpDigitBoxes.forEach(b => { b.value = ''; b.classList.remove('filled'); });
@@ -1990,7 +1993,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (verifyOtpBtn) verifyOtpBtn.addEventListener('click', handleVerifyOtp);
 
     async function handleLogout() {
-        try { await fetch('/api/auth/logout', { method: 'POST' }); } catch (e) {}
+        try { await fetch('/api/auth/logout', { method: 'POST' }); } catch (e) { }
 
         if (state.otpTimerInterval) clearInterval(state.otpTimerInterval);
         localStorage.removeItem('jack_auth_token');
@@ -1998,18 +2001,34 @@ document.addEventListener('DOMContentLoaded', () => {
         state.currentUser = null;
 
         updateUserUI();
+        setDashboardLocked(true);
         showToast('Signed out successfully', 'info');
         if (authStepProfile) authStepProfile.style.display = 'none';
         if (authStepRequest) authStepRequest.style.display = 'block';
+        openAuthModal();
     }
 
     if (authSignOutBtn) authSignOutBtn.addEventListener('click', handleLogout);
     if (sidebarLogoutNavBtn) sidebarLogoutNavBtn.addEventListener('click', handleLogout);
     if (authSwitchAccountBtn) authSwitchAccountBtn.addEventListener('click', handleLogout);
 
+    function setDashboardLocked(locked) {
+        const mainContent = document.querySelector('.main-content');
+        const sidebar = document.getElementById('appSidebar');
+        if (locked) {
+            if (mainContent) { mainContent.style.filter = 'blur(6px)'; mainContent.style.pointerEvents = 'none'; mainContent.style.userSelect = 'none'; }
+            if (sidebar) { sidebar.style.filter = 'blur(4px)'; sidebar.style.pointerEvents = 'none'; }
+        } else {
+            if (mainContent) { mainContent.style.filter = ''; mainContent.style.pointerEvents = ''; mainContent.style.userSelect = ''; }
+            if (sidebar) { sidebar.style.filter = ''; sidebar.style.pointerEvents = ''; }
+        }
+    }
+
     async function checkAuthState() {
         if (!state.authToken) {
             updateUserUI();
+            setDashboardLocked(true);
+            openAuthModal();
             return;
         }
 
@@ -2021,14 +2040,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 const data = await res.json();
                 state.currentUser = data.user;
                 updateUserUI();
+                setDashboardLocked(false);
             } else {
                 localStorage.removeItem('jack_auth_token');
                 state.authToken = '';
                 state.currentUser = null;
                 updateUserUI();
+                setDashboardLocked(true);
+                openAuthModal();
             }
         } catch (e) {
             updateUserUI();
+            setDashboardLocked(true);
+            openAuthModal();
         }
     }
 

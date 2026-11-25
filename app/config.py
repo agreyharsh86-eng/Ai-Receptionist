@@ -38,9 +38,18 @@ COMPANY_INDUSTRY = "Enterprise Cloud, AI Solutions & Healthcare Consultation"
 COMPANY_LOCATION = "Tower 4, Suite 1200, 500 Silicon Vista Way, Innovation District"
 COMPANY_HOURS = "Monday to Friday: 8:30 AM – 5:30 PM EST. Saturday & Sunday: Closed."
 
+# Application Environment
+APP_ENV = os.getenv("APP_ENV", "development").strip().lower()
+MONGO_STRICT = os.getenv("MONGO_STRICT", "false").strip().lower() in ("true", "1", "yes") or APP_ENV == "production"
+
 # MongoDB Database Configuration
 MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://127.0.0.1:27017")
 MONGODB_DB_NAME = os.getenv("MONGODB_DB_NAME", "jack_receptionist")
+MONGO_SERVER_SELECTION_TIMEOUT_MS = int(os.getenv("MONGO_SERVER_SELECTION_TIMEOUT_MS", "5000"))
+MONGO_CONNECT_TIMEOUT_MS = int(os.getenv("MONGO_CONNECT_TIMEOUT_MS", "5000"))
+MONGO_SOCKET_TIMEOUT_MS = int(os.getenv("MONGO_SOCKET_TIMEOUT_MS", "10000"))
+MONGO_MAX_POOL_SIZE = int(os.getenv("MONGO_MAX_POOL_SIZE", "50"))
+MONGO_MIN_POOL_SIZE = int(os.getenv("MONGO_MIN_POOL_SIZE", "5"))
 
 # Authentication & JWT Configuration
 JWT_SECRET = os.getenv("JWT_SECRET", "jack-ai-receptionist-secret-key-2026-auth-token")
@@ -49,13 +58,9 @@ JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "10080")) # 7 days
 OTP_EXPIRE_SECONDS = int(os.getenv("OTP_EXPIRE_SECONDS", "30")) # 30 seconds expiry as required
 OTP_MAX_ATTEMPTS = int(os.getenv("OTP_MAX_ATTEMPTS", "3"))
 
-# Email Delivery Configuration (SMTP)
-SMTP_HOST = os.getenv("SMTP_HOST", "")
-SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
-SMTP_USER = os.getenv("SMTP_USER", "")
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
-SMTP_FROM = os.getenv("SMTP_FROM", "Jack AI Receptionist <noreply@hrenterprises.com>")
-SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() in ("true", "1", "yes")
+# Resend Email Delivery Configuration
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
+EMAIL_FROM = os.getenv("EMAIL_FROM", "JACK <onboarding@resend.dev>")
 
 # SMS Delivery Configuration (Twilio)
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID", "")

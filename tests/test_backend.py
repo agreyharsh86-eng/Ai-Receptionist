@@ -11,6 +11,13 @@ from google.genai import types
 
 from app.main import app
 from app.database import init_db, get_db
+from app.database_mongo import (
+    list_appointments,
+    list_patients,
+    update_appointment_status,
+    upsert_user_on_login,
+    _redact_mongo_uri,
+)
 from app.tools.receptionist_tools import (
     search_doctors,
     check_availability,
@@ -280,18 +287,11 @@ class TestReceptionistBackend(unittest.TestCase):
 
         # Verify verified booking in database
         async def check_and_clean_db():
-            db = await get_db()
-            try:
-                async with db.execute(
-                    "SELECT * FROM appointments WHERE visitor_name = 'Sarah Connor' AND status = 'Confirmed'"
-                ) as cur:
-                    row = await cur.fetchone()
-                if row:
-                    await db.execute("DELETE FROM appointments WHERE visitor_name = 'Sarah Connor'")
-                    await db.commit()
-                return row
-            finally:
-                await db.close()
+            appts = await list_appointments(status="Confirmed")
+            row = next((a for a in appts if a.get("visitor_name") == "Sarah Connor"), None)
+            if row:
+                await update_appointment_status(row.get("id") or row.get("_id"), "Cancelled")
+            return row
 
         row = asyncio.run(check_and_clean_db())
         self.assertIsNotNone(row)
@@ -394,20 +394,13 @@ class TestReceptionistBackend(unittest.TestCase):
         self.assertIn("reply", data)
         self.assertTrue(any(a["tool"] == "book_appointment" for a in data.get("actions", [])))
 
-        # Verify that Diana Prince was actually saved to SQLite database
+        # Verify that Diana Prince was actually saved to database
         async def check_booking():
-            db = await get_db()
-            try:
-                async with db.execute(
-                    "SELECT id, visitor_name, staff_name, date, time_slot, status FROM appointments WHERE visitor_name = 'Diana Prince'"
-                ) as cur:
-                    row = await cur.fetchone()
-                if row:
-                    await db.execute("DELETE FROM appointments WHERE visitor_name = 'Diana Prince'")
-                    await db.commit()
-                return row
-            finally:
-                await db.close()
+            appts = await list_appointments()
+            row = next((a for a in appts if a.get("visitor_name") == "Diana Prince"), None)
+            if row:
+                await update_appointment_status(row.get("id") or row.get("_id"), "Cancelled")
+            return row
 
         saved = asyncio.run(check_booking())
         self.assertIsNotNone(saved)
@@ -523,6 +516,53 @@ class TestReceptionistBackend(unittest.TestCase):
         self.assertIn("id=\"appSidebar\"", res.text)
         self.assertIn("id=\"floatingAssistantWindow\"", res.text)
         self.assertIn("id=\"quickTriggerJackBtn\"", res.text)
+
+    def test_20_mongo_architecture_integrity(self):
+        """Verify URI credential redaction, sparse-safe user creation, patient linking, and 409 conflict."""
+        # 1. Credential redaction
+        redacted = _redact_mongo_uri("mongodb+srv://admin:SuperSecret123@cluster0.mongodb.net/jack")
+        self.assertNotIn("SuperSecret123", redacted)
+        self.assertIn("***:***", redacted)
+
+        # 2. Multiple email-only users omit phone_number (no None collision)
+        async def check_users_and_patients():
+            u1 = await upsert_user_on_login("alice.arch@example.com", "email", "Alice")
+            u2 = await upsert_user_on_login("bob.arch@example.com", "email", "Bob")
+            self.assertNotIn("phone_number", u1)
+            self.assertNotIn("phone_number", u2)
+            self.assertEqual(u1.get("role"), "patient")
+
+            # 3. Appointment creates dedicated patient record with patient_id
+            target_date = (date.today() + timedelta(days=9)).isoformat()
+            res1 = await book_appointment(
+                visitor_name="Bruce Wayne",
+                contact_info="bruce@wayne.com",
+                staff_or_department="Dr. Arun Prakash Sharma",
+                date_str=target_date,
+                time_slot="10:00 AM",
+                purpose="Cardiology Checkup",
+            )
+            self.assertEqual(res1["status"], "confirmed")
+            appts = await list_appointments()
+            bruce_appt = next((a for a in appts if a.get("visitor_name") == "Bruce Wayne" and a.get("date") == target_date), None)
+            self.assertIsNotNone(bruce_appt)
+            self.assertTrue(bool(bruce_appt.get("patient_id")))
+
+            # 4. Concurrent/duplicate slot returns conflict
+            res2 = await book_appointment(
+                visitor_name="Clark Kent",
+                contact_info="clark@dailyplanet.com",
+                staff_or_department="Dr. Arun Prakash Sharma",
+                date_str=target_date,
+                time_slot="10:00 AM",
+                purpose="Consultation",
+            )
+            self.assertEqual(res2["status"], "conflict")
+
+            # Cleanup
+            await update_appointment_status(bruce_appt.get("id") or bruce_appt.get("_id"), "Cancelled")
+
+        asyncio.run(check_users_and_patients())
 
 if __name__ == "__main__":
     unittest.main()

@@ -5,7 +5,25 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime, date, timedelta
 import re
-from app.database import get_db
+from app.database_mongo import (
+    list_company_info,
+    list_staff,
+    list_appointments as db_list_appointments,
+    update_appointment_status as db_update_appointment_status,
+    cancel_latest_confirmed_appointment,
+    list_messages as db_list_messages,
+    mark_message_read as db_mark_message_read,
+    delete_message as db_delete_message,
+    list_call_logs as db_list_call_logs,
+    list_doctors as db_list_doctors,
+    list_specializations as db_list_specializations,
+    get_doctor as db_get_doctor,
+    create_doctor as db_create_doctor,
+    delete_doctor as db_delete_doctor,
+    list_patients as db_list_patients,
+    get_dashboard_stats as db_get_dashboard_stats,
+    get_analytics_metrics as db_get_analytics_metrics,
+)
 import app.config as config
 from app.services.auth_service import get_optional_user
 from app.tools.receptionist_tools import (
@@ -70,65 +88,25 @@ class AppointmentStatusUpdate(BaseModel):
 # 1. Company Info Endpoints
 @router.get("/company")
 async def get_company_details():
-    db = await get_db()
-    try:
-        async with db.execute("SELECT key, category, title, content FROM company_info") as cursor:
-            rows = await cursor.fetchall()
-            info = [dict(r) for r in rows]
-
-        return {
-            "name": config.COMPANY_NAME,
-            "industry": config.COMPANY_INDUSTRY,
-            "location": config.COMPANY_LOCATION,
-            "hours": config.COMPANY_HOURS,
-            "receptionist_name": config.RECEPTIONIST_NAME,
-            "knowledge_base": info
-        }
-    finally:
-        await db.close()
+    info = await list_company_info()
+    return {
+        "name": config.COMPANY_NAME,
+        "industry": config.COMPANY_INDUSTRY,
+        "location": config.COMPANY_LOCATION,
+        "hours": config.COMPANY_HOURS,
+        "receptionist_name": config.RECEPTIONIST_NAME,
+        "knowledge_base": info
+    }
 
 # 2. Staff Directory Endpoints
 @router.get("/directory")
 async def get_staff_directory(q: Optional[str] = None):
-    db = await get_db()
-    try:
-        if q:
-            async with db.execute(
-                """SELECT id, name, title, department, email, phone_extension, status, bio
-                   FROM staff_directory
-                   WHERE name LIKE ? OR title LIKE ? OR department LIKE ?""",
-                (f"%{q}%", f"%{q}%", f"%{q}%")
-            ) as cursor:
-                rows = await cursor.fetchall()
-        else:
-            async with db.execute(
-                "SELECT id, name, title, department, email, phone_extension, status, bio FROM staff_directory ORDER BY department, name"
-            ) as cursor:
-                rows = await cursor.fetchall()
-
-        return [dict(r) for r in rows]
-    finally:
-        await db.close()
+    return await list_staff(q)
 
 # 3. Appointments Endpoints
 @router.get("/appointments")
 async def list_appointments(status: Optional[str] = None):
-    db = await get_db()
-    try:
-        if status:
-            async with db.execute(
-                "SELECT * FROM appointments WHERE status = ? ORDER BY date ASC, time_slot ASC",
-                (status,)
-            ) as cursor:
-                rows = await cursor.fetchall()
-        else:
-            async with db.execute(
-                "SELECT * FROM appointments ORDER BY date ASC, time_slot ASC"
-            ) as cursor:
-                rows = await cursor.fetchall()
-        return [dict(r) for r in rows]
-    finally:
-        await db.close()
+    return await db_list_appointments(status=status)
 
 @router.post("/appointments")
 async def create_appointment_endpoint(
@@ -137,7 +115,9 @@ async def create_appointment_endpoint(
 ):
     visitor_name = app_data.visitor_name
     contact_info = app_data.contact_info
+    user_id = None
     if current_user:
+        user_id = str(current_user.get("_id") or current_user.get("id") or "") or None
         if not visitor_name or visitor_name.strip() in ("", "Guest"):
             visitor_name = current_user.get("name") or current_user.get("email") or current_user.get("phone_number")
         if not contact_info or contact_info.strip() in ("", "N/A"):
@@ -149,49 +129,24 @@ async def create_appointment_endpoint(
         staff_or_department=app_data.staff_or_department,
         date_str=app_data.date,
         time_slot=app_data.time_slot,
-        purpose=app_data.purpose or "General Business Consultation"
+        purpose=app_data.purpose or "General Business Consultation",
+        user_id=user_id
     )
     if res.get("status") == "conflict":
         raise HTTPException(status_code=409, detail=res.get("message"))
     return res
 
 @router.delete("/appointments/{appointment_id}")
-async def cancel_appointment_by_id(appointment_id: int):
-    db = await get_db()
-    try:
-        async with db.execute(
-            "SELECT * FROM appointments WHERE id = ?", (appointment_id,)
-        ) as cursor:
-            row = await cursor.fetchone()
-            if not row:
-                raise HTTPException(status_code=404, detail="Appointment not found")
-
-        await db.execute(
-            "UPDATE appointments SET status = 'Cancelled' WHERE id = ?", (appointment_id,)
-        )
-        await db.commit()
-        return {"status": "success", "message": f"Appointment #{appointment_id} marked as cancelled."}
-    finally:
-        await db.close()
+async def cancel_appointment_by_id(appointment_id: str):
+    updated = await db_update_appointment_status(appointment_id, "Cancelled")
+    if not updated:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+    return {"status": "success", "message": f"Appointment #{appointment_id} marked as cancelled."}
 
 # 4. Caller Messages Endpoints
 @router.get("/messages")
 async def list_messages(unread_only: bool = False):
-    db = await get_db()
-    try:
-        if unread_only:
-            async with db.execute(
-                "SELECT * FROM caller_messages WHERE is_read = 0 ORDER BY created_at DESC"
-            ) as cursor:
-                rows = await cursor.fetchall()
-        else:
-            async with db.execute(
-                "SELECT * FROM caller_messages ORDER BY created_at DESC"
-            ) as cursor:
-                rows = await cursor.fetchall()
-        return [dict(r) for r in rows]
-    finally:
-        await db.close()
+    return await db_list_messages(unread_only=unread_only)
 
 @router.post("/messages")
 async def create_message_endpoint(msg: MessageCreate):
@@ -205,296 +160,73 @@ async def create_message_endpoint(msg: MessageCreate):
     return res
 
 @router.patch("/messages/{message_id}/read")
-async def mark_message_read(message_id: int):
-    db = await get_db()
-    try:
-        await db.execute(
-            "UPDATE caller_messages SET is_read = 1 WHERE id = ?", (message_id,)
-        )
-        await db.commit()
-        return {"status": "success"}
-    finally:
-        await db.close()
+async def mark_message_read(message_id: str):
+    await db_mark_message_read(message_id)
+    return {"status": "success"}
 
 @router.delete("/messages/{message_id}")
-async def delete_message(message_id: int):
-    db = await get_db()
-    try:
-        await db.execute("DELETE FROM caller_messages WHERE id = ?", (message_id,))
-        await db.commit()
-        return {"status": "success"}
-    finally:
-        await db.close()
+async def delete_message(message_id: str):
+    await db_delete_message(message_id)
+    return {"status": "success"}
 
 # 5. Call Logs
 @router.get("/call-logs")
 async def list_call_logs():
-    db = await get_db()
-    try:
-        async with db.execute(
-            "SELECT * FROM call_logs ORDER BY started_at DESC LIMIT 30"
-        ) as cursor:
-            rows = await cursor.fetchall()
-        return [dict(r) for r in rows]
-    finally:
-        await db.close()
+    return await db_list_call_logs(limit=30)
 
 # 5.5 Doctors Directory
 @router.get("/doctors")
 async def list_doctors(specialization: Optional[str] = None, q: Optional[str] = None):
-    db = await get_db()
-    try:
-        if q:
-            async with db.execute(
-                """SELECT * FROM doctors
-                   WHERE name LIKE ? OR specialization LIKE ? OR department LIKE ? OR bio LIKE ?
-                   ORDER BY rating DESC""",
-                (f"%{q}%", f"%{q}%", f"%{q}%", f"%{q}%")
-            ) as cursor:
-                rows = await cursor.fetchall()
-        elif specialization:
-            async with db.execute(
-                "SELECT * FROM doctors WHERE specialization LIKE ? ORDER BY rating DESC",
-                (f"%{specialization}%",)
-            ) as cursor:
-                rows = await cursor.fetchall()
-        else:
-            async with db.execute(
-                "SELECT * FROM doctors ORDER BY rating DESC"
-            ) as cursor:
-                rows = await cursor.fetchall()
-
-        return [dict(r) for r in rows]
-    finally:
-        await db.close()
+    return await db_list_doctors(specialization=specialization, query=q)
 
 @router.get("/doctors/specializations")
 @router.get("/doctors/specializations/list")
 async def list_specializations():
-    db = await get_db()
-    try:
-        async with db.execute("SELECT DISTINCT specialization FROM doctors ORDER BY specialization") as cursor:
-            rows = await cursor.fetchall()
-        return [row["specialization"] for row in rows]
-    finally:
-        await db.close()
+    return await db_list_specializations()
 
 @router.get("/doctors/{doctor_id}")
-async def get_doctor(doctor_id: int):
-    db = await get_db()
-    try:
-        async with db.execute("SELECT * FROM doctors WHERE id = ?", (doctor_id,)) as cursor:
-            row = await cursor.fetchone()
-            if not row:
-                raise HTTPException(status_code=404, detail="Doctor not found")
-            return dict(row)
-    finally:
-        await db.close()
+async def get_doctor(doctor_id: str):
+    doc = await db_get_doctor(doctor_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Doctor not found")
+    return doc
 
 @router.post("/doctors")
 async def add_doctor(doc: DoctorCreate):
-    db = await get_db()
-    try:
-        async with db.execute(
-            """INSERT INTO doctors 
-               (name, specialization, department, qualification, experience_years, consultation_fee, 
-                available_days, available_slots, rating, status, phone_extension, email, bio, avatar_emoji)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                doc.name, doc.specialization, doc.department, doc.qualification,
-                doc.experience_years, doc.consultation_fee, doc.available_days, doc.available_slots,
-                doc.rating, doc.status, doc.phone_extension, doc.email, doc.bio, doc.avatar_emoji
-            )
-        ) as cursor:
-            doc_id = cursor.lastrowid
-            await db.commit()
-        return {"status": "success", "id": doc_id, "message": f"Doctor {doc.name} successfully registered."}
-    finally:
-        await db.close()
+    created = await db_create_doctor(doc.model_dump())
+    doc_id = created.get("id") or created.get("_id")
+    return {"status": "success", "id": doc_id, "message": f"Doctor {doc.name} successfully registered."}
 
 @router.delete("/doctors/{doctor_id}")
-async def remove_doctor(doctor_id: int):
-    db = await get_db()
-    try:
-        async with db.execute("DELETE FROM doctors WHERE id = ?", (doctor_id,)) as cursor:
-            if cursor.rowcount == 0:
-                raise HTTPException(status_code=404, detail="Doctor not found")
-            await db.commit()
-        return {"status": "success", "message": f"Doctor #{doctor_id} removed successfully."}
-    finally:
-        await db.close()
+async def remove_doctor(doctor_id: str):
+    deleted = await db_delete_doctor(doctor_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Doctor not found")
+    return {"status": "success", "message": f"Doctor #{doctor_id} removed successfully."}
 
 # 5.6 Patients Directory & History
 @router.get("/patients")
 async def list_patients(q: Optional[str] = None):
-    db = await get_db()
-    try:
-        sql = """
-            SELECT 
-                visitor_name AS name,
-                contact_info,
-                COUNT(*) AS total_appointments,
-                MAX(date) AS last_visit_date,
-                (SELECT staff_name FROM appointments a2 WHERE a2.visitor_name = a1.visitor_name ORDER BY date DESC, id DESC LIMIT 1) AS last_doctor,
-                (SELECT department FROM appointments a2 WHERE a2.visitor_name = a1.visitor_name ORDER BY date DESC, id DESC LIMIT 1) AS last_department,
-                (SELECT status FROM appointments a2 WHERE a2.visitor_name = a1.visitor_name ORDER BY date DESC, id DESC LIMIT 1) AS last_status
-            FROM appointments a1
-            WHERE visitor_name != ''
-        """
-        params = []
-        if q:
-            sql += " AND (visitor_name LIKE ? OR contact_info LIKE ?)"
-            params.extend([f"%{q}%", f"%{q}%"])
-        sql += " GROUP BY visitor_name ORDER BY last_visit_date DESC"
-        
-        async with db.execute(sql, params) as cursor:
-            rows = await cursor.fetchall()
-        return [dict(r) for r in rows]
-    finally:
-        await db.close()
+    return await db_list_patients(query=q)
 
 # 5.7 Summary Statistics for Dashboard
 @router.get("/stats")
 async def get_dashboard_stats():
-    db = await get_db()
-    try:
-        today_iso = date.today().isoformat()
-        
-        # 1. Total appointments
-        async with db.execute("SELECT COUNT(*) FROM appointments") as cur:
-            total_appts = (await cur.fetchone())[0]
-
-        # 2. Available doctors
-        async with db.execute("SELECT COUNT(*) FROM doctors WHERE status = 'Available'") as cur:
-            avail_doctors = (await cur.fetchone())[0]
-            
-        # 3. Total doctors
-        async with db.execute("SELECT COUNT(*) FROM doctors") as cur:
-            total_doctors = (await cur.fetchone())[0]
-
-        # 4. Registered unique patients
-        async with db.execute("SELECT COUNT(DISTINCT visitor_name) FROM appointments WHERE visitor_name != ''") as cur:
-            total_patients = (await cur.fetchone())[0]
-
-        # 5. Pending / Confirmed upcoming appointments
-        async with db.execute("SELECT COUNT(*) FROM appointments WHERE status IN ('Confirmed', 'Pending') AND date >= ?", (today_iso,)) as cur:
-            pending_appts = (await cur.fetchone())[0]
-
-        # 6. Today's appointments
-        async with db.execute("SELECT COUNT(*) FROM appointments WHERE date = ? AND status != 'Cancelled'", (today_iso,)) as cur:
-            today_appts = (await cur.fetchone())[0]
-
-        # 7. Completed appointments
-        async with db.execute("SELECT COUNT(*) FROM appointments WHERE status = 'Completed'") as cur:
-            completed_appts = (await cur.fetchone())[0]
-
-        # 8. Cancelled appointments
-        async with db.execute("SELECT COUNT(*) FROM appointments WHERE status = 'Cancelled'") as cur:
-            cancelled_appts = (await cur.fetchone())[0]
-
-        # 9. Unread messages
-        async with db.execute("SELECT COUNT(*) FROM caller_messages WHERE is_read = 0") as cur:
-            unread_msgs = (await cur.fetchone())[0]
-
-        return {
-            "total_appointments": total_appts,
-            "available_doctors": avail_doctors,
-            "total_doctors": total_doctors,
-            "registered_patients": max(total_patients, 1),
-            "pending_appointments": pending_appts,
-            "today_appointments": today_appts,
-            "completed_appointments": completed_appts,
-            "cancelled_appointments": cancelled_appts,
-            "unread_messages": unread_msgs,
-            "system_status": "Operational",
-            "date": today_iso
-        }
-    finally:
-        await db.close()
+    return await db_get_dashboard_stats()
 
 # 5.7.1 Detailed Healthcare Analytics
 @router.get("/analytics")
 async def get_analytics_metrics():
     """Retrieve operational analytics for appointments, departments, and AI reception call metrics."""
-    db = await get_db()
-    try:
-        # Department breakdown
-        async with db.execute(
-            """SELECT department, COUNT(*) as count 
-               FROM appointments 
-               WHERE department != '' 
-               GROUP BY department 
-               ORDER BY count DESC LIMIT 8"""
-        ) as cur:
-            dept_rows = await cur.fetchall()
-            dept_breakdown = [{"department": r["department"], "count": r["count"]} for r in dept_rows]
-
-        # Status breakdown
-        async with db.execute(
-            """SELECT status, COUNT(*) as count 
-               FROM appointments 
-               GROUP BY status"""
-        ) as cur:
-            status_rows = await cur.fetchall()
-            status_breakdown = [{"status": r["status"], "count": r["count"]} for r in status_rows]
-
-        # 7-Day Recent Appointment Trends
-        async with db.execute(
-            """SELECT date, COUNT(*) as count 
-               FROM appointments 
-               GROUP BY date 
-               ORDER BY date DESC LIMIT 7"""
-        ) as cur:
-            trend_rows = await cur.fetchall()
-            daily_trend = [{"date": r["date"], "count": r["count"]} for r in reversed(trend_rows)]
-
-        # Doctor Workload Breakdown
-        async with db.execute(
-            """SELECT staff_name as doctor_name, COUNT(*) as appointments_count 
-               FROM appointments 
-               WHERE staff_name != '' 
-               GROUP BY staff_name 
-               ORDER BY appointments_count DESC LIMIT 6"""
-        ) as cur:
-            doc_rows = await cur.fetchall()
-            doctor_load = [{"doctor_name": r["doctor_name"], "appointments_count": r["appointments_count"]} for r in doc_rows]
-
-        # Call Logs Summary
-        async with db.execute("SELECT COUNT(*) as total_calls, AVG(duration_seconds) as avg_duration FROM call_logs") as cur:
-            call_row = await cur.fetchone()
-            total_calls = call_row["total_calls"] if call_row else 0
-            avg_duration = round(call_row["avg_duration"] or 45, 1) if call_row else 45.0
-
-        return {
-            "department_breakdown": dept_breakdown,
-            "status_breakdown": status_breakdown,
-            "daily_trend": daily_trend,
-            "doctor_load": doctor_load,
-            "call_metrics": {
-                "total_calls": max(total_calls, 14),
-                "avg_duration_seconds": avg_duration,
-                "first_call_resolution_rate": "92.4%",
-                "ai_handled_rate": "88.6%"
-            }
-        }
-    finally:
-        await db.close()
+    return await db_get_analytics_metrics()
 
 # 5.8 Update Appointment Status
 @router.patch("/appointments/{appointment_id}/status")
-async def update_appointment_status(appointment_id: int, status_update: AppointmentStatusUpdate):
-    db = await get_db()
-    try:
-        async with db.execute(
-            "UPDATE appointments SET status = ? WHERE id = ?",
-            (status_update.status, appointment_id)
-        ) as cursor:
-            if cursor.rowcount == 0:
-                raise HTTPException(status_code=404, detail="Appointment not found")
-            await db.commit()
-        return {"status": "success", "message": f"Appointment #{appointment_id} updated to {status_update.status}."}
-    finally:
-        await db.close()
+async def update_appointment_status(appointment_id: str, status_update: AppointmentStatusUpdate):
+    updated = await db_update_appointment_status(appointment_id, status_update.status)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+    return {"status": "success", "message": f"Appointment #{appointment_id} updated to {status_update.status}."}
 
 # 6. Configuration Endpoints
 @router.get("/config")
@@ -937,48 +669,37 @@ async def handle_conversational_chat(query: str, history: Optional[List[Dict[str
     # View Existing Appointments
     # -------------------------------------------------------------------------
     if any(w in text for w in ["appointment", "appointments", "booking", "bookings"]) and any(w in text for w in ["show", "view", "list", "check", "my", "upcoming", "status"]):
-        db = await get_db()
-        try:
-            async with db.execute("SELECT visitor_name, staff_name, date, time_slot, status FROM appointments WHERE status != 'Cancelled' ORDER BY date ASC LIMIT 4") as cur:
-                rows = await cur.fetchall()
-            actions_taken.append({"tool": "list_appointments", "args": {}})
-            if rows:
-                appts_text = "; ".join([f"{r['visitor_name']} with {r['staff_name']} on {r['date']} at {r['time_slot']}" for r in rows])
-                return {
-                    "reply": f"Here are the active appointments: {appts_text}. You can also view all bookings in the Appointments tab.",
-                    "actions": actions_taken
-                }
-            else:
-                return {
-                    "reply": "There are currently no active appointments scheduled. Would you like me to book one for you with one of our specialist doctors?",
-                    "actions": actions_taken
-                }
-        finally:
-            await db.close()
+        all_appts = await db_list_appointments()
+        rows = [a for a in all_appts if a.get("status") != "Cancelled"][:4]
+        actions_taken.append({"tool": "list_appointments", "args": {}})
+        if rows:
+            appts_text = "; ".join([f"{r['visitor_name']} with {r['staff_name']} on {r['date']} at {r['time_slot']}" for r in rows])
+            return {
+                "reply": f"Here are the active appointments: {appts_text}. You can also view all bookings in the Appointments tab.",
+                "actions": actions_taken
+            }
+        else:
+            return {
+                "reply": "There are currently no active appointments scheduled. Would you like me to book one for you with one of our specialist doctors?",
+                "actions": actions_taken
+            }
 
     # -------------------------------------------------------------------------
     # Cancel Appointment
     # -------------------------------------------------------------------------
     if any(w in text for w in ["cancel appointment", "cancel booking", "cancel my appointment"]):
-        db = await get_db()
-        try:
-            async with db.execute("SELECT id, visitor_name, staff_name, date, time_slot FROM appointments WHERE status = 'Confirmed' ORDER BY id DESC LIMIT 1") as cur:
-                row = await cur.fetchone()
-            if row:
-                await db.execute("UPDATE appointments SET status = 'Cancelled' WHERE id = ?", (row['id'],))
-                await db.commit()
-                actions_taken.append({"tool": "cancel_appointment", "args": {"id": row['id']}})
-                return {
-                    "reply": f"The appointment for {row['visitor_name']} with {row['staff_name']} on {row['date']} at {row['time_slot']} has been successfully cancelled.",
-                    "actions": actions_taken
-                }
-            else:
-                return {
-                    "reply": "I couldn't find an active confirmed appointment to cancel. You can view all bookings in the Appointments tab.",
-                    "actions": []
-                }
-        finally:
-            await db.close()
+        row = await cancel_latest_confirmed_appointment()
+        if row:
+            actions_taken.append({"tool": "cancel_appointment", "args": {"id": row.get("id") or row.get("_id")}})
+            return {
+                "reply": f"The appointment for {row['visitor_name']} with {row['staff_name']} on {row['date']} at {row['time_slot']} has been successfully cancelled.",
+                "actions": actions_taken
+            }
+        else:
+            return {
+                "reply": "I couldn't find an active confirmed appointment to cancel. You can view all bookings in the Appointments tab.",
+                "actions": []
+            }
 
     # -------------------------------------------------------------------------
     # Corporate & Facility Info (Hours, Address, Parking, Wi-Fi, Cafeteria)

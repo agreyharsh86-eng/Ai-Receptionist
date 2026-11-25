@@ -14,7 +14,7 @@ from typing import Optional, Callable, Dict, Any, List
 from google import genai
 from google.genai import types
 
-from app.database import get_db
+from app.database_mongo import save_call_log
 import app.config as config
 from app.tools.receptionist_tools import TOOL_REGISTRY, RECEPTIONIST_TOOL_FUNCTIONS
 
@@ -405,23 +405,15 @@ class LiveSessionManager:
 
             summary = f"Call duration: {duration}s. {len(self.transcript)} dialogue turns. Actions: {len(self.actions_taken)}."
 
-            # Works with async context manager pattern for db connections
-            async with get_db() as db:
-                await db.execute(
-                    """INSERT INTO call_logs
-                       (session_id, caller_identifier, started_at, ended_at, duration_seconds, summary, full_transcript, actions_taken)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (
-                        f"call-{int(self.started_at.timestamp())}",
-                        "Front Desk Voice Caller",
-                        self.started_at.isoformat(),
-                        ended_at.isoformat(),
-                        duration,
-                        summary,
-                        transcript_str,
-                        actions_str,
-                    ),
-                )
-                await db.commit()
+            await save_call_log(
+                session_id=f"call-{int(self.started_at.timestamp())}",
+                caller_identifier="Front Desk Voice Caller",
+                started_at=self.started_at,
+                ended_at=ended_at,
+                duration_seconds=duration,
+                summary=summary,
+                full_transcript=transcript_str,
+                actions_taken=actions_str,
+            )
         except Exception as e:
             logger.error(f"Failed to save call log: {e}")
